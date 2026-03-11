@@ -29,6 +29,7 @@ const navItems = [
   { title: "Stock", url: "/stock", icon: Package },
   { title: "Ventes", url: "/sales", icon: ShoppingCart },
   { title: "Rapports", url: "/reports", icon: BarChart3 },
+  { title: "Utilisateurs", url: "/users", icon: Users, adminOnly: true },
 ];
 
 export function AppSidebar() {
