@@ -39,17 +39,31 @@ export default function Users() {
     return <Navigate to="/" replace />;
   }
 
-  const { data: users, isLoading } = useQuery({
+  const { data: userRoles, isLoading } = useQuery({
     queryKey: ["all-users"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: roles, error } = await supabase
         .from("user_roles")
-        .select("*, profiles!user_roles_user_id_fkey(full_name, avatar_url)")
+        .select("*")
         .order("role");
       if (error) throw error;
-      return data;
+      return roles;
     },
   });
+
+  const { data: allProfiles } = useQuery({
+    queryKey: ["all-profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("*");
+      return data ?? [];
+    },
+  });
+
+  // Merge profiles into user roles
+  const users = userRoles?.map((ur) => ({
+    ...ur,
+    profile: allProfiles?.find((p) => p.user_id === ur.user_id),
+  }));
 
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
