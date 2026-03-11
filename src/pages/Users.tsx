@@ -139,7 +139,7 @@ export default function Users() {
               ) : users && users.length > 0 ? (
                 users.map((u) => {
                   const RoleIcon = ROLE_ICONS[u.role];
-                  const profileData = (u as any).profiles;
+                  const profileData = u.profile;
                   return (
                     <TableRow key={u.id}>
                       <TableCell>
