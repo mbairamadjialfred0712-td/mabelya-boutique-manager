@@ -114,8 +114,8 @@ export default function Users() {
               <DialogTitle className="font-display">Attribuer un rôle</DialogTitle>
             </DialogHeader>
             <AssignRoleForm
-              profiles={profiles ?? []}
-              existingRoles={users ?? []}
+              profiles={allProfiles ?? []}
+              existingRoles={userRoles ?? []}
               onSubmit={(data) => addRole.mutate(data)}
               loading={addRole.isPending}
             />
