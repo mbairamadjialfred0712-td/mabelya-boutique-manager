@@ -3,14 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Package, Search } from "lucide-react";
 import { toast } from "sonner";
+import { AddProductForm } from "@/components/stock/AddProductForm";
 
 export default function Stock() {
   const [open, setOpen] = useState(false);
@@ -47,8 +46,9 @@ export default function Stock() {
 
   const addProduct = useMutation({
     mutationFn: async (product: {
-      name: string; category_id: string; size: string; color: string;
-      purchase_price: number; selling_price: number; stock_quantity: number; boutique_id: string;
+      name: string; category_id: string | null; size: string; color: string;
+      purchase_price: number; selling_price: number; stock_quantity: number;
+      boutique_id: string; image_url: string | null;
     }) => {
       const { error } = await supabase.from("products").insert(product);
       if (error) throw error;
@@ -124,8 +124,12 @@ export default function Stock() {
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                          <Package className="h-5 w-5 text-muted-foreground" />
+                        <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          )}
                         </div>
                         <div>
                           <p className="font-medium text-sm">{p.name}</p>
@@ -157,88 +161,5 @@ export default function Stock() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function AddProductForm({
-  categories, boutiques, onSubmit, loading,
-}: {
-  categories: any[];
-  boutiques: any[];
-  onSubmit: (data: any) => void;
-  loading: boolean;
-}) {
-  const [form, setForm] = useState({
-    name: "", category_id: "", size: "", color: "",
-    purchase_price: "", selling_price: "", stock_quantity: "", boutique_id: "",
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.boutique_id || !form.selling_price) {
-      toast.error("Veuillez remplir les champs obligatoires");
-      return;
-    }
-    onSubmit({
-      ...form,
-      purchase_price: Number(form.purchase_price) || 0,
-      selling_price: Number(form.selling_price),
-      stock_quantity: Number(form.stock_quantity) || 0,
-      category_id: form.category_id || null,
-    });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2 space-y-2">
-          <Label>Nom du produit *</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        </div>
-        <div className="space-y-2">
-          <Label>Catégorie</Label>
-          <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
-            <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Boutique *</Label>
-          <Select value={form.boutique_id} onValueChange={(v) => setForm({ ...form, boutique_id: v })}>
-            <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-            <SelectContent>
-              {boutiques.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name} — {(b.countries as any)?.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Taille</Label>
-          <Input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} placeholder="S, M, L..." />
-        </div>
-        <div className="space-y-2">
-          <Label>Couleur</Label>
-          <Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
-        </div>
-        <div className="space-y-2">
-          <Label>Prix d'achat</Label>
-          <Input type="number" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} />
-        </div>
-        <div className="space-y-2">
-          <Label>Prix de vente *</Label>
-          <Input type="number" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} required />
-        </div>
-        <div className="space-y-2">
-          <Label>Quantité en stock</Label>
-          <Input type="number" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} />
-        </div>
-      </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Ajout en cours..." : "Ajouter le produit"}
-      </Button>
-    </form>
   );
 }
