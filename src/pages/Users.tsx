@@ -73,14 +73,6 @@ export default function Users() {
     },
   });
 
-  const { data: profiles } = useQuery({
-    queryKey: ["all-profiles"],
-    queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("*");
-      return data ?? [];
-    },
-  });
-
   const addRole = useMutation({
     mutationFn: async (input: { user_id: string; role: AppRole }) => {
       const { error } = await supabase.from("user_roles").insert(input);
