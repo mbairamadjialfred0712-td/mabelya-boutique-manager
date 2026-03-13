@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_campaigns: {
+        Row: {
+          boutique_id: string
+          budget: number
+          campaign_name: string
+          clicks: number
+          conversions: number
+          created_at: string
+          end_date: string | null
+          id: string
+          impressions: number
+          platform: string
+          spent: number
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          boutique_id: string
+          budget?: number
+          campaign_name: string
+          clicks?: number
+          conversions?: number
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          impressions?: number
+          platform?: string
+          spent?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          boutique_id?: string
+          budget?: number
+          campaign_name?: string
+          clicks?: number
+          conversions?: number
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          impressions?: number
+          platform?: string
+          spent?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_boutique_id_fkey"
+            columns: ["boutique_id"]
+            isOneToOne: false
+            referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       boutiques: {
         Row: {
           address: string | null
@@ -93,6 +152,47 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          boutique_id: string
+          category: string
+          created_at: string
+          description: string
+          expense_date: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          boutique_id: string
+          category?: string
+          created_at?: string
+          description: string
+          expense_date?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          boutique_id?: string
+          category?: string
+          created_at?: string
+          description?: string
+          expense_date?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_boutique_id_fkey"
+            columns: ["boutique_id"]
+            isOneToOne: false
+            referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
@@ -260,6 +360,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sales_boutique_id_fkey"
+            columns: ["boutique_id"]
+            isOneToOne: false
+            referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff: {
+        Row: {
+          boutique_id: string
+          created_at: string
+          full_name: string
+          hire_date: string
+          id: string
+          is_active: boolean
+          phone: string | null
+          role: string
+          salary: number
+          updated_at: string
+        }
+        Insert: {
+          boutique_id: string
+          created_at?: string
+          full_name: string
+          hire_date?: string
+          id?: string
+          is_active?: boolean
+          phone?: string | null
+          role?: string
+          salary?: number
+          updated_at?: string
+        }
+        Update: {
+          boutique_id?: string
+          created_at?: string
+          full_name?: string
+          hire_date?: string
+          id?: string
+          is_active?: boolean
+          phone?: string | null
+          role?: string
+          salary?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_boutique_id_fkey"
             columns: ["boutique_id"]
             isOneToOne: false
             referencedRelation: "boutiques"
