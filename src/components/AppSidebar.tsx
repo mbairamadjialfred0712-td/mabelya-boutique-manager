@@ -4,9 +4,9 @@ import {
   ShoppingCart,
   BarChart3,
   LogOut,
-  Scissors,
   Users,
 } from "lucide-react";
+import mabelyaLogo from "@/assets/mabelya-logo.jpg";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,8 +46,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-            <Scissors className="h-5 w-5 text-sidebar-primary-foreground" />
+          <div className="h-9 w-9 rounded-lg overflow-hidden shrink-0">
+            <img src={mabelyaLogo} alt="Mabelya Fashion" className="h-full w-full object-cover" />
           </div>
           {!collapsed && (
             <div>
