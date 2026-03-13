@@ -4,9 +4,9 @@ import {
   ShoppingCart,
   BarChart3,
   LogOut,
-  Scissors,
   Users,
 } from "lucide-react";
+import mabelyaLogo from "@/assets/mabelya-logo.jpg";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
