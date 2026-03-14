@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
+import { RoleGuard } from "@/components/RoleGuard";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Index";
 import Stock from "./pages/Stock";
@@ -18,7 +19,14 @@ import CountryAnalysis from "./pages/CountryAnalysis";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 2, // 2 minutes
+      retry: 1,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -52,12 +60,42 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute><Stock /></ProtectedRoute>} />
             <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-            <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-            <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
-            <Route path="/ads" element={<ProtectedRoute><AdsCampaigns /></ProtectedRoute>} />
-            <Route path="/country-analysis" element={<ProtectedRoute><CountryAnalysis /></ProtectedRoute>} />
+            <Route path="/expenses" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin", "admin_boutique"]}>
+                  <Expenses />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/staff" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin", "admin_boutique"]}>
+                  <Staff />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/ads" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin", "admin_boutique"]}>
+                  <AdsCampaigns />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/country-analysis" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <CountryAnalysis />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/users" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <Users />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
