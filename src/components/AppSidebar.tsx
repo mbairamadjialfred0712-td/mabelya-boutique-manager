@@ -15,6 +15,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import mabelyaLogo from "@/assets/mabelya-logo.jpg";
+import type { Database } from "@/integrations/supabase/types";
 import {
   Sidebar,
   SidebarContent,
@@ -28,16 +29,25 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const navItems = [
+type AppRole = Database["public"]["Enums"]["app_role"];
+
+interface NavItem {
+  title: string;
+  url: string;
+  icon: typeof LayoutDashboard;
+  allowedRoles?: AppRole[];
+}
+
+const navItems: NavItem[] = [
   { title: "Tableau de Bord", url: "/", icon: LayoutDashboard },
   { title: "Gestion Stock", url: "/stock", icon: Package },
   { title: "Ventes", url: "/sales", icon: ShoppingCart },
-  { title: "Dépenses", url: "/expenses", icon: Receipt },
-  { title: "Personnel", url: "/staff", icon: UserCheck },
-  { title: "Ads Campaigns", url: "/ads", icon: Megaphone },
-  { title: "Analyse Pays", url: "/country-analysis", icon: Globe },
+  { title: "Dépenses", url: "/expenses", icon: Receipt, allowedRoles: ["super_admin", "admin_boutique"] },
+  { title: "Personnel", url: "/staff", icon: UserCheck, allowedRoles: ["super_admin", "admin_boutique"] },
+  { title: "Ads Campaigns", url: "/ads", icon: Megaphone, allowedRoles: ["super_admin", "admin_boutique"] },
+  { title: "Analyse Pays", url: "/country-analysis", icon: Globe, allowedRoles: ["super_admin"] },
   { title: "Rapports", url: "/reports", icon: BarChart3 },
-  { title: "Utilisateurs", url: "/users", icon: Users, adminOnly: true },
+  { title: "Utilisateurs", url: "/users", icon: Users, allowedRoles: ["super_admin"] },
   { title: "Mon Profil", url: "/profile", icon: User },
 ];
 
@@ -45,11 +55,12 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { profile, signOut, hasRole } = useAuth();
+  const { profile, roles, signOut } = useAuth();
 
-  const visibleNavItems = navItems.filter(
-    (item) => !(item as any).adminOnly || hasRole("super_admin")
-  );
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.allowedRoles) return true;
+    return item.allowedRoles.some((r) => roles.includes(r));
+  });
 
   return (
     <Sidebar collapsible="icon">
