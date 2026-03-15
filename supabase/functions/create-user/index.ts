@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, full_name, role } = await req.json();
+    const { email, password, full_name, role, avatar_url } = await req.json();
 
     if (!email || !password || !full_name || !role) {
       return new Response(JSON.stringify({ error: "Champs requis manquants" }), {

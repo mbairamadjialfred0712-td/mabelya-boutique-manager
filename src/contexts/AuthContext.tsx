@@ -31,13 +31,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         setTimeout(() => {
           fetchUserData(session.user.id);
         }, 0);
+        // Log login activity
+        if (event === "SIGNED_IN") {
+          supabase.from("activity_logs").insert({
+            user_id: session.user.id,
+            action: "login",
+            details: "Connexion réussie",
+          }).then(() => {});
+        }
       } else {
         setRoles([]);
         setProfile(null);
