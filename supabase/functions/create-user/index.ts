@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, full_name, role } = await req.json();
+    const { email, password, full_name, role, avatar_url } = await req.json();
 
     if (!email || !password || !full_name || !role) {
       return new Response(JSON.stringify({ error: "Champs requis manquants" }), {
@@ -69,6 +69,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: roleError.message }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Update avatar if provided
+    if (avatar_url) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ avatar_url })
+        .eq("user_id", newUser.user.id);
     }
 
     return new Response(

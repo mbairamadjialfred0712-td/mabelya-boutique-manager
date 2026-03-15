@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ad_campaigns: {
         Row: {
           boutique_id: string
@@ -72,6 +102,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_settings: {
+        Row: {
+          app_name: string
+          id: string
+          logo_url: string | null
+          updated_at: string
+          updated_by: string | null
+          welcome_message: string
+        }
+        Insert: {
+          app_name?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          welcome_message?: string
+        }
+        Update: {
+          app_name?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          welcome_message?: string
+        }
+        Relationships: []
       }
       boutiques: {
         Row: {
