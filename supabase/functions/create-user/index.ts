@@ -71,6 +71,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Update avatar if provided
+    if (avatar_url) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ avatar_url })
+        .eq("user_id", newUser.user.id);
+    }
+
     return new Response(
       JSON.stringify({ success: true, user_id: newUser.user.id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
