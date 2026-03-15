@@ -1,20 +1,25 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search } from "lucide-react";
+import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddProductForm } from "@/components/stock/AddProductForm";
+import { EditProductDialog } from "@/components/stock/EditProductDialog";
 
 export default function Stock() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [editProduct, setEditProduct] = useState<any>(null);
   const queryClient = useQueryClient();
+  const { hasRole } = useAuth();
+  const isSuperAdmin = hasRole("super_admin");
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["products"],
@@ -57,6 +62,32 @@ export default function Stock() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       setOpen(false);
       toast.success("Produit ajouté avec succès");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const updateProduct = useMutation({
+    mutationFn: async (product: any) => {
+      const { id, ...updates } = product;
+      const { error } = await supabase.from("products").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      setEditProduct(null);
+      toast.success("Produit modifié avec succès");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteProduct = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Produit supprimé");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -114,11 +145,12 @@ export default function Stock() {
                 <TableHead className="hidden lg:table-cell">Boutique</TableHead>
                 <TableHead className="text-right">Prix</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
+                {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((p) => (
                   <TableRow key={p.id}>
@@ -151,15 +183,44 @@ export default function Stock() {
                         {p.stock_quantity}
                       </Badge>
                     </TableCell>
+                    {isSuperAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditProduct(p)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun produit trouvé</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun produit trouvé</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {editProduct && (
+        <EditProductDialog
+          product={editProduct}
+          categories={categories ?? []}
+          open={!!editProduct}
+          onOpenChange={(o) => { if (!o) setEditProduct(null); }}
+          onSubmit={(data) => updateProduct.mutate(data)}
+          loading={updateProduct.isPending}
+        />
+      )}
     </div>
   );
 }
