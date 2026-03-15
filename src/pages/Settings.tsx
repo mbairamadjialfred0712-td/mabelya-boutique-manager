@@ -14,10 +14,8 @@ import { Navigate } from "react-router-dom";
 export default function Settings() {
   const { hasRole, user } = useAuth();
   const queryClient = useQueryClient();
-
-  if (!hasRole("super_admin")) {
-    return <Navigate to="/" replace />;
-  }
+  const [appName, setAppName] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("");
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["app-settings"],
@@ -31,9 +29,6 @@ export default function Settings() {
       return data;
     },
   });
-
-  const [appName, setAppName] = useState("");
-  const [welcomeMessage, setWelcomeMessage] = useState("");
 
   useEffect(() => {
     if (settings) {
@@ -62,6 +57,10 @@ export default function Settings() {
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  if (!hasRole("super_admin")) {
+    return <Navigate to="/" replace />;
+  }
 
   if (isLoading) {
     return (

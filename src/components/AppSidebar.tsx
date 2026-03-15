@@ -10,6 +10,8 @@ import {
   Megaphone,
   Globe,
   User,
+  Settings,
+  Activity,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -48,6 +50,8 @@ const navItems: NavItem[] = [
   { title: "Analyse Pays", url: "/country-analysis", icon: Globe, allowedRoles: ["super_admin"] },
   { title: "Rapports", url: "/reports", icon: BarChart3 },
   { title: "Utilisateurs", url: "/users", icon: Users, allowedRoles: ["super_admin"] },
+  { title: "Activités", url: "/activity", icon: Activity, allowedRoles: ["super_admin"] },
+  { title: "Paramètres", url: "/settings", icon: Settings, allowedRoles: ["super_admin"] },
   { title: "Mon Profil", url: "/profile", icon: User },
 ];
 

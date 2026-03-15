@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { RoleGuard } from "@/components/RoleGuard";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Index";
 import Stock from "./pages/Stock";
 import Sales from "./pages/Sales";
@@ -17,12 +18,14 @@ import Staff from "./pages/Staff";
 import AdsCampaigns from "./pages/AdsCampaigns";
 import CountryAnalysis from "./pages/CountryAnalysis";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import ActivityLog from "./pages/ActivityLog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2, // 2 minutes
+      staleTime: 1000 * 60 * 2,
       retry: 1,
     },
   },
@@ -57,6 +60,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute><Stock /></ProtectedRoute>} />
             <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
@@ -93,6 +97,20 @@ const App = () => (
               <ProtectedRoute>
                 <RoleGuard allowedRoles={["super_admin"]}>
                   <Users />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <Settings />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/activity" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <ActivityLog />
                 </RoleGuard>
               </ProtectedRoute>
             } />
