@@ -20,6 +20,7 @@ import CountryAnalysis from "./pages/CountryAnalysis";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import ActivityLog from "./pages/ActivityLog";
+import Clients from "./pages/Clients";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
