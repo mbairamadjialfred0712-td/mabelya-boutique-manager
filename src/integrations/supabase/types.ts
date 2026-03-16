@@ -186,6 +186,72 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          age_range: string | null
+          boutique_id: string | null
+          country_id: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          gender: string | null
+          id: string
+          notes: string | null
+          phone: string | null
+          status: string | null
+          total_spent: number
+          updated_at: string
+          visit_count: number
+        }
+        Insert: {
+          age_range?: string | null
+          boutique_id?: string | null
+          country_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          gender?: string | null
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          status?: string | null
+          total_spent?: number
+          updated_at?: string
+          visit_count?: number
+        }
+        Update: {
+          age_range?: string | null
+          boutique_id?: string | null
+          country_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          gender?: string | null
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          status?: string | null
+          total_spent?: number
+          updated_at?: string
+          visit_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_boutique_id_fkey"
+            columns: ["boutique_id"]
+            isOneToOne: false
+            referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       countries: {
         Row: {
           code: string
@@ -386,6 +452,7 @@ export type Database = {
       sales: {
         Row: {
           boutique_id: string
+          client_id: string | null
           created_at: string
           customer_name: string | null
           id: string
@@ -396,6 +463,7 @@ export type Database = {
         }
         Insert: {
           boutique_id: string
+          client_id?: string | null
           created_at?: string
           customer_name?: string | null
           id?: string
@@ -406,6 +474,7 @@ export type Database = {
         }
         Update: {
           boutique_id?: string
+          client_id?: string | null
           created_at?: string
           customer_name?: string | null
           id?: string
@@ -420,6 +489,13 @@ export type Database = {
             columns: ["boutique_id"]
             isOneToOne: false
             referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
