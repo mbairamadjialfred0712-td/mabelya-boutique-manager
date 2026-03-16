@@ -94,6 +94,7 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
             <Route path="/users" element={
               <ProtectedRoute>
                 <RoleGuard allowedRoles={["super_admin"]}>
