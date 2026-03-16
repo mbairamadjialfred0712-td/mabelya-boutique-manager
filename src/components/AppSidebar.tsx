@@ -46,6 +46,7 @@ const navItems: NavItem[] = [
   { title: "Gestion Stock", url: "/stock", icon: Package },
   { title: "Ventes", url: "/sales", icon: ShoppingCart },
   { title: "Dépenses", url: "/expenses", icon: Receipt, allowedRoles: ["super_admin", "admin_boutique"] },
+  { title: "Clients", url: "/clients", icon: UserRound },
   { title: "Personnel", url: "/staff", icon: UserCheck, allowedRoles: ["super_admin", "admin_boutique"] },
   { title: "Ads Campaigns", url: "/ads", icon: Megaphone, allowedRoles: ["super_admin", "admin_boutique"] },
   { title: "Analyse Pays", url: "/country-analysis", icon: Globe, allowedRoles: ["super_admin"] },
