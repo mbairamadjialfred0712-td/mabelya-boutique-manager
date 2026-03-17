@@ -34,8 +34,6 @@ export default function ActivityLog() {
   const [filterAction, setFilterAction] = useState<string>("all");
   const [realtimeLogs, setRealtimeLogs] = useState<any[]>([]);
 
-  if (!hasRole("super_admin")) return <Navigate to="/" replace />;
-
   const { data: logs, isLoading } = useQuery({
     queryKey: ["activity-logs"],
     queryFn: async () => {
