@@ -10,10 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { UserPlus, Shield, ShieldCheck, Store, Trash2, Camera } from "lucide-react";
+import { UserPlus, Shield, ShieldCheck, Store, Trash2, Camera, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
 import { logActivity } from "@/hooks/useActivityLog";
+import { formatCurrency } from "@/lib/constants";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -37,17 +40,17 @@ const ROLE_ICONS: Record<AppRole, typeof Shield> = {
 };
 
 export default function Users() {
-  const { hasRole, session } = useAuth();
+  const { hasRole } = useAuth();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [filterCountry, setFilterCountry] = useState<string>("all");
   const queryClient = useQueryClient();
 
   const { data: userRoles, isLoading } = useQuery({
     queryKey: ["all-users"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("*")
-        .order("role");
+      const { data, error } = await supabase.from("user_roles").select("*").order("role");
       if (error) throw error;
       return data;
     },
@@ -61,10 +64,32 @@ export default function Users() {
     },
   });
 
+  const { data: countries } = useQuery({
+    queryKey: ["countries"],
+    queryFn: async () => {
+      const { data } = await supabase.from("countries").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
+  const { data: boutiques } = useQuery({
+    queryKey: ["boutiques"],
+    queryFn: async () => {
+      const { data } = await supabase.from("boutiques").select("*, countries(name)").order("name");
+      return data ?? [];
+    },
+  });
+
   const users = userRoles?.map((ur) => ({
     ...ur,
     profile: allProfiles?.find((p) => p.user_id === ur.user_id),
   }));
+
+  const filtered = users?.filter((u) => {
+    const matchSearch = !search || (u.profile?.full_name || "").toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === "all" || u.role === filterRole;
+    return matchSearch && matchRole;
+  });
 
   const deleteRole = useMutation({
     mutationFn: async (id: string) => {
@@ -80,20 +105,12 @@ export default function Users() {
 
   const createUser = useMutation({
     mutationFn: async (input: { email: string; password: string; full_name: string; role: AppRole; avatar_url?: string }) => {
-      const { data, error } = await supabase.functions.invoke("create-user", {
-        body: input,
-      });
+      const { data, error } = await supabase.functions.invoke("create-user", { body: input });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
-      // Upload avatar if provided
       if (input.avatar_url && data?.user_id) {
-        await supabase
-          .from("profiles")
-          .update({ avatar_url: input.avatar_url })
-          .eq("user_id", data.user_id);
+        await supabase.from("profiles").update({ avatar_url: input.avatar_url }).eq("user_id", data.user_id);
       }
-
       await logActivity("user_create", `Créé: ${input.full_name} (${ROLE_LABELS[input.role]})`);
       return data;
     },
@@ -105,49 +122,94 @@ export default function Users() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (!hasRole("super_admin")) {
-    return <Navigate to="/" replace />;
-  }
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Liste des Utilisateurs — Mabelya", 14, 22);
+    doc.setFontSize(10);
+    doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
+    const rows = (filtered ?? []).map((u) => [
+      u.profile?.full_name || "—",
+      u.user_id.slice(0, 12) + "...",
+      ROLE_LABELS[u.role],
+    ]);
+    (doc as any).autoTable({
+      startY: 36,
+      head: [["Nom", "ID Utilisateur", "Rôle"]],
+      body: rows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [200, 50, 80] },
+    });
+    doc.save("utilisateurs-mabelya.pdf");
+  };
+
+  if (!hasRole("super_admin")) return <Navigate to="/" replace />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold">Gestion des utilisateurs</h1>
-          <p className="text-muted-foreground text-sm">{users?.length ?? 0} utilisateurs</p>
+          <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} utilisateurs</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><UserPlus className="h-4 w-4 mr-2" /> Créer un utilisateur</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-display">Nouvel utilisateur</DialogTitle>
-            </DialogHeader>
-            <CreateUserForm
-              onSubmit={(data) => createUser.mutate(data)}
-              loading={createUser.isPending}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><UserPlus className="h-4 w-4 mr-2" /> Créer un utilisateur</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="font-display">Nouvel utilisateur</DialogTitle>
+              </DialogHeader>
+              <CreateUserForm
+                boutiques={boutiques ?? []}
+                countries={countries ?? []}
+                onSubmit={(data) => createUser.mutate(data)}
+                loading={createUser.isPending}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Role descriptions */}
+      {/* Role cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {(Object.entries(ROLE_LABELS) as [AppRole, string][]).map(([role, label]) => {
           const Icon = ROLE_ICONS[role];
+          const count = users?.filter((u) => u.role === role).length ?? 0;
           return (
             <Card key={role} className="border-border/50">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">{label}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-primary" />
+                    <span className="font-medium text-sm">{label}</span>
+                  </div>
+                  <Badge variant="secondary">{count}</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
+                <p className="text-xs text-muted-foreground mt-1">{ROLE_DESCRIPTIONS[role]}</p>
               </CardContent>
             </Card>
           );
         })}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Rechercher..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={filterRole} onValueChange={setFilterRole}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Rôle" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les rôles</SelectItem>
+            {(Object.entries(ROLE_LABELS) as [AppRole, string][]).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -156,34 +218,35 @@ export default function Users() {
             <TableHeader>
               <TableRow>
                 <TableHead>Utilisateur</TableHead>
+                <TableHead className="hidden md:table-cell">ID</TableHead>
                 <TableHead>Rôle</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
-              ) : users && users.length > 0 ? (
-                users.map((u) => {
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              ) : filtered && filtered.length > 0 ? (
+                filtered.map((u) => {
                   const RoleIcon = ROLE_ICONS[u.role];
                   return (
                     <TableRow key={u.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                             {u.profile?.avatar_url ? (
                               <img src={u.profile.avatar_url} alt="" className="h-full w-full object-cover" />
                             ) : (
-                              <span className="text-sm font-bold text-primary">
-                                {(u.profile?.full_name || "?")[0].toUpperCase()}
-                              </span>
+                              <span className="text-sm font-bold text-primary">{(u.profile?.full_name || "?")[0].toUpperCase()}</span>
                             )}
                           </div>
                           <div>
                             <p className="font-medium text-sm">{u.profile?.full_name || "Utilisateur"}</p>
-                            <p className="text-xs text-muted-foreground">{u.user_id.slice(0, 8)}...</p>
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <code className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{u.user_id.slice(0, 12)}...</code>
                       </TableCell>
                       <TableCell>
                         <Badge variant={u.role === "super_admin" ? "default" : "secondary"} className="gap-1">
@@ -193,11 +256,7 @@ export default function Users() {
                       </TableCell>
                       <TableCell className="text-right">
                         {u.role !== "super_admin" && (
-                          <Button
-                            variant="ghost" size="icon"
-                            onClick={() => deleteRole.mutate(u.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => deleteRole.mutate(u.id)} className="text-destructive hover:text-destructive">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
@@ -206,7 +265,7 @@ export default function Users() {
                   );
                 })
               ) : (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Aucun utilisateur</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Aucun utilisateur</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -217,10 +276,12 @@ export default function Users() {
 }
 
 function CreateUserForm({
-  onSubmit, loading,
+  onSubmit, loading, boutiques, countries,
 }: {
   onSubmit: (data: { email: string; password: string; full_name: string; role: AppRole; avatar_url?: string }) => void;
   loading: boolean;
+  boutiques: any[];
+  countries: any[];
 }) {
   const [form, setForm] = useState({ email: "", password: "", full_name: "", role: "" as AppRole | "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -231,6 +292,7 @@ function CreateUserForm({
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) { toast.error("L'image ne doit pas dépasser 10 Mo"); return; }
       setAvatarFile(file);
       setAvatarPreview(URL.createObjectURL(file));
     }
@@ -239,7 +301,7 @@ function CreateUserForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email || !form.password || !form.full_name || !form.role) {
-      toast.error("Veuillez remplir tous les champs");
+      toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
     if (form.password.length < 6) {
@@ -252,49 +314,36 @@ function CreateUserForm({
       setUploading(true);
       const fileExt = avatarFile.name.split(".").pop();
       const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("user-avatars")
-        .upload(fileName, avatarFile);
-      if (uploadError) {
-        toast.error("Erreur upload photo: " + uploadError.message);
-        setUploading(false);
-        return;
-      }
+      const { error: uploadError } = await supabase.storage.from("user-avatars").upload(fileName, avatarFile);
+      if (uploadError) { toast.error("Erreur upload photo: " + uploadError.message); setUploading(false); return; }
       const { data: urlData } = supabase.storage.from("user-avatars").getPublicUrl(fileName);
       avatar_url = urlData.publicUrl;
       setUploading(false);
     }
 
-    onSubmit({
-      email: form.email,
-      password: form.password,
-      full_name: form.full_name,
-      role: form.role as AppRole,
-      avatar_url,
-    });
+    onSubmit({ email: form.email, password: form.password, full_name: form.full_name, role: form.role as AppRole, avatar_url });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Avatar upload */}
       <div className="flex justify-center">
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="relative h-20 w-20 rounded-full bg-muted border-2 border-dashed border-border hover:border-primary transition-colors overflow-hidden flex items-center justify-center"
+          className="relative h-24 w-24 rounded-full bg-muted border-2 border-dashed border-border hover:border-primary transition-colors overflow-hidden flex items-center justify-center"
         >
           {avatarPreview ? (
             <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
           ) : (
-            <Camera className="h-6 w-6 text-muted-foreground" />
+            <Camera className="h-7 w-7 text-muted-foreground" />
           )}
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
       </div>
-      <p className="text-xs text-center text-muted-foreground">Photo de profil (optionnel)</p>
+      <p className="text-xs text-center text-muted-foreground">Photo de profil (max 10 Mo)</p>
 
       <div className="space-y-2">
-        <Label>Nom complet *</Label>
+        <Label>Nom et prénom *</Label>
         <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
       </div>
       <div className="space-y-2">
@@ -314,9 +363,7 @@ function CreateUserForm({
             <SelectItem value="sales_staff">Vendeuse</SelectItem>
           </SelectContent>
         </Select>
-        {form.role && (
-          <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[form.role as AppRole]}</p>
-        )}
+        {form.role && <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[form.role as AppRole]}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={loading || uploading}>
         {uploading ? "Upload photo..." : loading ? "Création..." : "Créer l'utilisateur"}

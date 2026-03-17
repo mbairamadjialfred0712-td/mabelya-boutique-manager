@@ -6,27 +6,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Package, Search, Pencil, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/constants";
 import { AddProductForm } from "@/components/stock/AddProductForm";
 import { EditProductDialog } from "@/components/stock/EditProductDialog";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 export default function Stock() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [editProduct, setEditProduct] = useState<any>(null);
+  const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const isSuperAdmin = hasRole("super_admin");
+
+  const { data: countries } = useQuery({
+    queryKey: ["countries"],
+    queryFn: async () => {
+      const { data } = await supabase.from("countries").select("*").order("name");
+      return data ?? [];
+    },
+  });
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("*, categories(name), boutiques(name, countries(name))")
+        .select("*, categories(name), boutiques(name, country_id, countries(name))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -50,11 +64,7 @@ export default function Stock() {
   });
 
   const addProduct = useMutation({
-    mutationFn: async (product: {
-      name: string; category_id: string | null; size: string; color: string;
-      purchase_price: number; selling_price: number; stock_quantity: number;
-      boutique_id: string; image_url: string | null;
-    }) => {
+    mutationFn: async (product: any) => {
       const { error } = await supabase.from("products").insert(product);
       if (error) throw error;
     },
@@ -92,46 +102,78 @@ export default function Stock() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const filtered = products?.filter(
-    (p) => p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredBoutiques = boutiques?.filter((b) => filterCountry === "all" || (b as any).country_id === filterCountry);
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", maximumFractionDigits: 0 }).format(val);
+  const filtered = products?.filter((p) => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchCountry = filterCountry === "all" || (p.boutiques as any)?.country_id === filterCountry;
+    const matchBoutique = filterBoutique === "all" || p.boutique_id === filterBoutique;
+    return matchSearch && matchCountry && matchBoutique;
+  });
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Gestion du Stock — Mabelya", 14, 22);
+    doc.setFontSize(10);
+    doc.text(`${filtered?.length ?? 0} produits — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
+    const rows = (filtered ?? []).map((p) => [
+      p.name, (p.categories as any)?.name ?? "—", formatCurrency(Number(p.selling_price)),
+      p.stock_quantity, (p.boutiques as any)?.name ?? "—", (p.boutiques as any)?.countries?.name ?? "—",
+      new Date(p.created_at).toLocaleDateString("fr-FR"),
+      p.stock_quantity > 0 ? "En stock" : "Rupture",
+    ]);
+    (doc as any).autoTable({
+      startY: 36,
+      head: [["Produit", "Catégorie", "Prix", "Stock", "Boutique", "Pays", "Créé le", "Statut"]],
+      body: rows,
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [200, 50, 80] },
+    });
+    doc.save("stock-mabelya.pdf");
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold">Gestion du stock</h1>
-          <p className="text-muted-foreground text-sm">{products?.length ?? 0} produits</p>
+          <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} produits</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Ajouter un produit</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-display">Nouveau produit</DialogTitle>
-            </DialogHeader>
-            <AddProductForm
-              categories={categories ?? []}
-              boutiques={boutiques ?? []}
-              onSubmit={(data) => addProduct.mutate(data)}
-              loading={addProduct.isPending}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Ajouter un produit</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader><DialogTitle className="font-display">Nouveau produit</DialogTitle></DialogHeader>
+              <AddProductForm categories={categories ?? []} boutiques={boutiques ?? []} onSubmit={(data) => addProduct.mutate(data)} loading={addProduct.isPending} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher un produit..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Rechercher un produit..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous pays</SelectItem>
+            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterBoutique} onValueChange={setFilterBoutique}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes boutiques</SelectItem>
+            {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -141,61 +183,50 @@ export default function Stock() {
               <TableRow>
                 <TableHead>Produit</TableHead>
                 <TableHead className="hidden md:table-cell">Catégorie</TableHead>
-                <TableHead className="hidden md:table-cell">Taille</TableHead>
-                <TableHead className="hidden lg:table-cell">Boutique</TableHead>
                 <TableHead className="text-right">Prix</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="hidden lg:table-cell">Boutique</TableHead>
+                <TableHead className="hidden lg:table-cell">Pays</TableHead>
+                <TableHead className="hidden xl:table-cell">Créé le</TableHead>
+                <TableHead>Statut</TableHead>
                 {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                          {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <Package className="h-5 w-5 text-muted-foreground" />
-                          )}
+                          {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-5 w-5 text-muted-foreground" />}
                         </div>
                         <div>
                           <p className="font-medium text-sm">{p.name}</p>
-                          {p.color && <p className="text-xs text-muted-foreground">{p.color}</p>}
+                          {p.color && <p className="text-xs text-muted-foreground">{p.color}{p.size ? ` • ${p.size}` : ""}</p>}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{(p.categories as any)?.name ?? "—"}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">{p.size ?? "—"}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">
-                      {(p.boutiques as any)?.name}
-                      <span className="text-xs text-muted-foreground block">
-                        {(p.boutiques as any)?.countries?.name}
-                      </span>
-                    </TableCell>
                     <TableCell className="text-right text-sm">{formatCurrency(Number(p.selling_price))}</TableCell>
                     <TableCell className="text-right">
-                      <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"}>
-                        {p.stock_quantity}
+                      <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"}>{p.stock_quantity}</Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{(p.boutiques as any)?.name}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{(p.boutiques as any)?.countries?.name}</TableCell>
+                    <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                    <TableCell>
+                      <Badge variant={p.stock_quantity > 0 ? "secondary" : "destructive"} className="text-xs">
+                        {p.stock_quantity > 0 ? "En stock" : "Rupture"}
                       </Badge>
                     </TableCell>
                     {isSuperAdmin && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditProduct(p)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id);
-                            }}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => setEditProduct(p)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => { if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -204,7 +235,7 @@ export default function Stock() {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun produit trouvé</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Aucun produit trouvé</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -213,12 +244,9 @@ export default function Stock() {
 
       {editProduct && (
         <EditProductDialog
-          product={editProduct}
-          categories={categories ?? []}
-          open={!!editProduct}
-          onOpenChange={(o) => { if (!o) setEditProduct(null); }}
-          onSubmit={(data) => updateProduct.mutate(data)}
-          loading={updateProduct.isPending}
+          product={editProduct} categories={categories ?? []}
+          open={!!editProduct} onOpenChange={(o) => { if (!o) setEditProduct(null); }}
+          onSubmit={(data) => updateProduct.mutate(data)} loading={updateProduct.isPending}
         />
       )}
     </div>

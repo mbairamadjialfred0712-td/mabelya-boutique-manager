@@ -5,13 +5,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/constants";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 interface CartItem {
   product_id: string;
@@ -22,17 +25,27 @@ interface CartItem {
 
 export default function Sales() {
   const [open, setOpen] = useState(false);
+  const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  const { data: countries } = useQuery({
+    queryKey: ["countries"],
+    queryFn: async () => {
+      const { data } = await supabase.from("countries").select("*").order("name");
+      return data ?? [];
+    },
+  });
 
   const { data: sales, isLoading } = useQuery({
     queryKey: ["sales"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("*, boutiques(name, countries(name)), sale_items(quantity, unit_price, products(name))")
+        .select("*, boutiques(name, country_id, countries(name)), sale_items(quantity, unit_price, products(name))")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(100);
       if (error) throw error;
       return data;
     },
@@ -53,36 +66,20 @@ export default function Sales() {
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
     queryFn: async () => {
-      const { data } = await supabase.from("boutiques").select("id, name").order("name");
+      const { data } = await supabase.from("boutiques").select("id, name, country_id, countries(name)").order("name");
       return data ?? [];
     },
   });
 
   const createSale = useMutation({
-    mutationFn: async (saleData: {
-      boutique_id: string; customer_name: string; payment_method: string; items: CartItem[];
-    }) => {
+    mutationFn: async (saleData: { boutique_id: string; customer_name: string; payment_method: string; items: CartItem[] }) => {
       const total = saleData.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
       const { data: sale, error: saleError } = await supabase
         .from("sales")
-        .insert({
-          boutique_id: saleData.boutique_id,
-          user_id: user!.id,
-          customer_name: saleData.customer_name || null,
-          payment_method: saleData.payment_method,
-          total_amount: total,
-        })
-        .select()
-        .single();
+        .insert({ boutique_id: saleData.boutique_id, user_id: user!.id, customer_name: saleData.customer_name || null, payment_method: saleData.payment_method, total_amount: total })
+        .select().single();
       if (saleError) throw saleError;
-
-      const items = saleData.items.map((i) => ({
-        sale_id: sale.id,
-        product_id: i.product_id,
-        quantity: i.quantity,
-        unit_price: i.unit_price,
-        total_price: i.quantity * i.unit_price,
-      }));
+      const items = saleData.items.map((i) => ({ sale_id: sale.id, product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
     },
@@ -96,32 +93,68 @@ export default function Sales() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", maximumFractionDigits: 0 }).format(val);
+  const filteredBoutiques = boutiques?.filter((b) => filterCountry === "all" || (b as any).country_id === filterCountry);
+
+  const filtered = sales?.filter((s) => {
+    const matchCountry = filterCountry === "all" || (s.boutiques as any)?.country_id === filterCountry;
+    const matchBoutique = filterBoutique === "all" || s.boutique_id === filterBoutique;
+    return matchCountry && matchBoutique;
+  });
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Ventes — Mabelya", 14, 22);
+    doc.setFontSize(10);
+    doc.text(`${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
+    const rows = (filtered ?? []).map((s) => [
+      s.invoice_number, (s.boutiques as any)?.name ?? "—", s.customer_name ?? "—",
+      s.payment_method, formatCurrency(Number(s.total_amount)), new Date(s.created_at).toLocaleDateString("fr-FR"),
+    ]);
+    (doc as any).autoTable({
+      startY: 36, head: [["Facture", "Boutique", "Client", "Paiement", "Montant", "Date"]], body: rows,
+      styles: { fontSize: 8 }, headStyles: { fillColor: [200, 50, 80] },
+    });
+    doc.save("ventes-mabelya.pdf");
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold">Ventes</h1>
-          <p className="text-muted-foreground text-sm">{sales?.length ?? 0} ventes récentes</p>
+          <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} ventes</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Nouvelle vente</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="font-display">Enregistrer une vente</DialogTitle>
-            </DialogHeader>
-            <NewSaleForm
-              products={products ?? []}
-              boutiques={boutiques ?? []}
-              onSubmit={(data) => createSale.mutate(data)}
-              loading={createSale.isPending}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Nouvelle vente</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle className="font-display">Enregistrer une vente</DialogTitle></DialogHeader>
+              <NewSaleForm products={products ?? []} boutiques={boutiques ?? []} onSubmit={(data) => createSale.mutate(data)} loading={createSale.isPending} />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous pays</SelectItem>
+            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterBoutique} onValueChange={setFilterBoutique}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes boutiques</SelectItem>
+            {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -131,6 +164,7 @@ export default function Sales() {
               <TableRow>
                 <TableHead>Facture</TableHead>
                 <TableHead className="hidden md:table-cell">Boutique</TableHead>
+                <TableHead className="hidden lg:table-cell">Pays</TableHead>
                 <TableHead className="hidden md:table-cell">Client</TableHead>
                 <TableHead>Paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
@@ -139,12 +173,13 @@ export default function Sales() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
-              ) : sales && sales.length > 0 ? (
-                sales.map((s) => (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              ) : filtered && filtered.length > 0 ? (
+                filtered.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-mono text-xs">{s.invoice_number}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{(s.boutiques as any)?.countries?.name}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
@@ -152,13 +187,11 @@ export default function Sales() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                      {new Date(s.created_at).toLocaleDateString("fr-FR")}
-                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString("fr-FR")}</TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune vente</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune vente</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -168,14 +201,7 @@ export default function Sales() {
   );
 }
 
-function NewSaleForm({
-  products, boutiques, onSubmit, loading,
-}: {
-  products: any[];
-  boutiques: any[];
-  onSubmit: (data: any) => void;
-  loading: boolean;
-}) {
+function NewSaleForm({ products, boutiques, onSubmit, loading }: { products: any[]; boutiques: any[]; onSubmit: (data: any) => void; loading: boolean }) {
   const [boutiqueId, setBoutiqueId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -183,51 +209,29 @@ function NewSaleForm({
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
 
-  const filteredProducts = products.filter(
-    (p) => !boutiqueId || (p.boutiques as any)?.id === boutiqueId
-  );
+  const filteredProducts = products.filter((p) => !boutiqueId || (p.boutiques as any)?.id === boutiqueId);
 
   const addToCart = () => {
     const product = products.find((p) => p.id === selectedProduct);
     if (!product) return;
-    if (Number(qty) > product.stock_quantity) {
-      toast.error("Stock insuffisant");
-      return;
-    }
+    if (Number(qty) > product.stock_quantity) { toast.error("Stock insuffisant"); return; }
     const existing = cart.find((c) => c.product_id === selectedProduct);
     if (existing) {
-      setCart(cart.map((c) =>
-        c.product_id === selectedProduct ? { ...c, quantity: c.quantity + Number(qty) } : c
-      ));
+      setCart(cart.map((c) => c.product_id === selectedProduct ? { ...c, quantity: c.quantity + Number(qty) } : c));
     } else {
-      setCart([...cart, {
-        product_id: product.id,
-        name: product.name,
-        quantity: Number(qty),
-        unit_price: Number(product.selling_price),
-      }]);
+      setCart([...cart, { product_id: product.id, name: product.name, quantity: Number(qty), unit_price: Number(product.selling_price) }]);
     }
     setSelectedProduct("");
     setQty("1");
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter((c) => c.product_id !== productId));
   };
 
   const total = cart.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!boutiqueId || !paymentMethod || cart.length === 0) {
-      toast.error("Veuillez remplir tous les champs et ajouter des produits");
-      return;
-    }
+    if (!boutiqueId || !paymentMethod || cart.length === 0) { toast.error("Remplissez tous les champs et ajoutez des produits"); return; }
     onSubmit({ boutique_id: boutiqueId, customer_name: customerName, payment_method: paymentMethod, items: cart });
   };
-
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", maximumFractionDigits: 0 }).format(val);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -236,9 +240,7 @@ function NewSaleForm({
           <Label>Boutique *</Label>
           <Select value={boutiqueId} onValueChange={setBoutiqueId}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-            <SelectContent>
-              {boutiques.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
-            </SelectContent>
+            <SelectContent>{boutiques.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
@@ -255,58 +257,36 @@ function NewSaleForm({
       </div>
       <div className="space-y-2">
         <Label>Nom du client (optionnel)</Label>
-        <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nom du client" />
+        <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
       </div>
-
       <div className="border border-border rounded-lg p-3 space-y-3">
         <Label className="text-sm font-semibold">Ajouter des produits</Label>
         <div className="flex gap-2">
           <Select value={selectedProduct} onValueChange={setSelectedProduct}>
             <SelectTrigger className="flex-1"><SelectValue placeholder="Produit" /></SelectTrigger>
-            <SelectContent>
-              {filteredProducts.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name} (stock: {p.stock_quantity})</SelectItem>
-              ))}
-            </SelectContent>
+            <SelectContent>{filteredProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} (stock: {p.stock_quantity})</SelectItem>)}</SelectContent>
           </Select>
-          <Input
-            type="number"
-            min="1"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            className="w-20"
-          />
-          <Button type="button" variant="secondary" onClick={addToCart} disabled={!selectedProduct}>
-            <Plus className="h-4 w-4" />
-          </Button>
+          <Input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="w-20" />
+          <Button type="button" variant="secondary" onClick={addToCart} disabled={!selectedProduct}><Plus className="h-4 w-4" /></Button>
         </div>
-
         {cart.length > 0 && (
           <div className="space-y-2">
             {cart.map((item) => (
               <div key={item.product_id} className="flex items-center justify-between text-sm bg-muted rounded-md px-3 py-2">
-                <div>
-                  <span className="font-medium">{item.name}</span>
-                  <span className="text-muted-foreground ml-2">x{item.quantity}</span>
-                </div>
+                <div><span className="font-medium">{item.name}</span><span className="text-muted-foreground ml-2">x{item.quantity}</span></div>
                 <div className="flex items-center gap-2">
                   <span>{formatCurrency(item.quantity * item.unit_price)}</span>
-                  <button type="button" onClick={() => removeFromCart(item.product_id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </button>
+                  <button type="button" onClick={() => setCart(cart.filter((c) => c.product_id !== item.product_id))}><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                 </div>
               </div>
             ))}
-            <div className="text-right font-bold text-sm pt-2 border-t border-border">
-              Total: {formatCurrency(total)}
-            </div>
+            <div className="text-right font-bold text-sm pt-2 border-t border-border">Total: {formatCurrency(total)}</div>
           </div>
         )}
       </div>
-
       <Button type="submit" className="w-full" disabled={loading || cart.length === 0}>
         <ShoppingCart className="h-4 w-4 mr-2" />
-        {loading ? "Enregistrement..." : `Enregistrer la vente — ${formatCurrency(total)}`}
+        {loading ? "Enregistrement..." : `Enregistrer — ${formatCurrency(total)}`}
       </Button>
     </form>
   );
