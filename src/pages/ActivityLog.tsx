@@ -66,6 +66,8 @@ export default function ActivityLog() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  if (!hasRole("super_admin")) return <Navigate to="/" replace />;
+
   const allLogs = [...realtimeLogs.filter((rl) => !logs?.some((l) => l.id === rl.id)), ...(logs ?? [])];
 
   const filtered = allLogs.filter((l) => filterAction === "all" || l.action === filterAction);
