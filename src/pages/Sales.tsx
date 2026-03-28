@@ -56,7 +56,7 @@ export default function Sales() {
     queryFn: async () => {
       const { data } = await supabase
         .from("products")
-        .select("id, name, selling_price, stock_quantity, boutiques(id, name)")
+        .select("id, name, selling_price, stock_quantity, boutique_id, boutiques(id, name)")
         .gt("stock_quantity", 0)
         .order("name");
       return data ?? [];
@@ -72,16 +72,63 @@ export default function Sales() {
   });
 
   const createSale = useMutation({
-    mutationFn: async (saleData: { boutique_id: string; customer_name: string; payment_method: string; items: CartItem[] }) => {
+    mutationFn: async (saleData: {
+      boutique_id: string;
+      customer_name: string;
+      payment_method: string;
+      items: CartItem[];
+    }) => {
       const total = saleData.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+
+      // Vérification stock avant insertion
+      for (const item of saleData.items) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock_quantity, name")
+          .eq("id", item.product_id)
+          .single();
+        if (!product || product.stock_quantity < item.quantity) {
+          throw new Error(`Stock insuffisant pour "${product?.name ?? item.product_id}"`);
+        }
+      }
+
       const { data: sale, error: saleError } = await supabase
         .from("sales")
-        .insert({ boutique_id: saleData.boutique_id, user_id: user!.id, customer_name: saleData.customer_name || null, payment_method: saleData.payment_method, total_amount: total })
-        .select().single();
+        .insert({
+          boutique_id: saleData.boutique_id,
+          user_id: user!.id,
+          customer_name: saleData.customer_name || null,
+          payment_method: saleData.payment_method,
+          total_amount: total,
+        })
+        .select()
+        .single();
       if (saleError) throw saleError;
-      const items = saleData.items.map((i) => ({ sale_id: sale.id, product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
+
+      const items = saleData.items.map((i) => ({
+        sale_id: sale.id,
+        product_id: i.product_id,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        total_price: i.quantity * i.unit_price,
+      }));
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
+
+      // Décrémentation du stock
+      for (const item of saleData.items) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", item.product_id)
+          .single();
+        if (product) {
+          await supabase
+            .from("products")
+            .update({ stock_quantity: product.stock_quantity - item.quantity })
+            .eq("id", item.product_id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -93,7 +140,9 @@ export default function Sales() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const filteredBoutiques = boutiques?.filter((b) => filterCountry === "all" || (b as any).country_id === filterCountry);
+  const filteredBoutiques = boutiques?.filter(
+    (b) => filterCountry === "all" || (b as any).country_id === filterCountry
+  );
 
   const filtered = sales?.filter((s) => {
     const matchCountry = filterCountry === "all" || (s.boutiques as any)?.country_id === filterCountry;
@@ -106,14 +155,25 @@ export default function Sales() {
     doc.setFontSize(18);
     doc.text("Ventes — Mabelya", 14, 22);
     doc.setFontSize(10);
-    doc.text(`${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
+    doc.text(
+      `${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`,
+      14,
+      30
+    );
     const rows = (filtered ?? []).map((s) => [
-      s.invoice_number, (s.boutiques as any)?.name ?? "—", s.customer_name ?? "—",
-      s.payment_method, formatCurrency(Number(s.total_amount)), new Date(s.created_at).toLocaleDateString("fr-FR"),
+      s.invoice_number,
+      (s.boutiques as any)?.name ?? "—",
+      s.customer_name ?? "—",
+      s.payment_method,
+      formatCurrency(Number(s.total_amount)),
+      new Date(s.created_at).toLocaleDateString("fr-FR"),
     ]);
     (doc as any).autoTable({
-      startY: 36, head: [["Facture", "Boutique", "Client", "Paiement", "Montant", "Date"]], body: rows,
-      styles: { fontSize: 8 }, headStyles: { fillColor: [200, 50, 80] },
+      startY: 36,
+      head: [["Facture", "Boutique", "Client", "Paiement", "Montant", "Date"]],
+      body: rows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [200, 50, 80] },
     });
     doc.save("ventes-mabelya.pdf");
   };
@@ -126,33 +186,62 @@ export default function Sales() {
           <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} ventes</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
+          <Button variant="outline" size="sm" onClick={exportPDF}>
+            <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Nouvelle vente</Button>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" /> Nouvelle vente
+              </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle className="font-display">Enregistrer une vente</DialogTitle></DialogHeader>
-              <NewSaleForm products={products ?? []} boutiques={boutiques ?? []} onSubmit={(data) => createSale.mutate(data)} loading={createSale.isPending} />
+              <DialogHeader>
+                <DialogTitle className="font-display">Enregistrer une vente</DialogTitle>
+              </DialogHeader>
+              <NewSaleForm
+                products={products ?? []}
+                boutiques={boutiques ?? []}
+                onSubmit={(data) => createSale.mutate(data)}
+                loading={createSale.isPending}
+              />
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filtres */}
       <div className="flex flex-wrap gap-3">
-        <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
+        <Select
+          value={filterCountry}
+          onValueChange={(v) => {
+            setFilterCountry(v);
+            setFilterBoutique("all");
+          }}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Pays" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tous pays</SelectItem>
-            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {countries?.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={filterBoutique} onValueChange={setFilterBoutique}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Boutique" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes boutiques</SelectItem>
-            {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            {filteredBoutiques?.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -173,25 +262,47 @@ export default function Sales() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Chargement...
+                  </TableCell>
+                </TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-mono text-xs">{s.invoice_number}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">{(s.boutiques as any)?.countries?.name}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">
+                      {(s.boutiques as any)?.name}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">
+                      {(s.boutiques as any)?.countries?.name}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">
+                      {s.customer_name ?? "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
-                        {s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement"}
+                        {s.payment_method === "cash"
+                          ? "Espèces"
+                          : s.payment_method === "mobile_money"
+                          ? "Mobile Money"
+                          : "Virement"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                    <TableCell className="text-right font-medium text-sm">
+                      {formatCurrency(Number(s.total_amount))}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                      {new Date(s.created_at).toLocaleDateString("fr-FR")}
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune vente</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Aucune vente
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -201,7 +312,17 @@ export default function Sales() {
   );
 }
 
-function NewSaleForm({ products, boutiques, onSubmit, loading }: { products: any[]; boutiques: any[]; onSubmit: (data: any) => void; loading: boolean }) {
+function NewSaleForm({
+  products,
+  boutiques,
+  onSubmit,
+  loading,
+}: {
+  products: any[];
+  boutiques: any[];
+  onSubmit: (data: any) => void;
+  loading: boolean;
+}) {
   const [boutiqueId, setBoutiqueId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -209,17 +330,27 @@ function NewSaleForm({ products, boutiques, onSubmit, loading }: { products: any
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
 
-  const filteredProducts = products.filter((p) => !boutiqueId || (p.boutiques as any)?.id === boutiqueId);
-
   const addToCart = () => {
     const product = products.find((p) => p.id === selectedProduct);
     if (!product) return;
-    if (Number(qty) > product.stock_quantity) { toast.error("Stock insuffisant"); return; }
+    const qtyNum = Number(qty);
+    if (qtyNum <= 0) { toast.error("La quantité doit être supérieure à 0"); return; }
+    if (qtyNum > product.stock_quantity) { toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`); return; }
     const existing = cart.find((c) => c.product_id === selectedProduct);
     if (existing) {
-      setCart(cart.map((c) => c.product_id === selectedProduct ? { ...c, quantity: c.quantity + Number(qty) } : c));
+      const newQty = existing.quantity + qtyNum;
+      if (newQty > product.stock_quantity) { toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`); return; }
+      setCart(cart.map((c) => c.product_id === selectedProduct ? { ...c, quantity: newQty } : c));
     } else {
-      setCart([...cart, { product_id: product.id, name: product.name, quantity: Number(qty), unit_price: Number(product.selling_price) }]);
+      setCart([
+        ...cart,
+        {
+          product_id: product.id,
+          name: product.name,
+          quantity: qtyNum,
+          unit_price: Number(product.selling_price),
+        },
+      ]);
     }
     setSelectedProduct("");
     setQty("1");
@@ -229,18 +360,25 @@ function NewSaleForm({ products, boutiques, onSubmit, loading }: { products: any
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!boutiqueId || !paymentMethod || cart.length === 0) { toast.error("Remplissez tous les champs et ajoutez des produits"); return; }
+    if (!boutiqueId) { toast.error("Veuillez sélectionner une boutique"); return; }
+    if (!paymentMethod) { toast.error("Veuillez sélectionner un mode de paiement"); return; }
+    if (cart.length === 0) { toast.error("Veuillez ajouter au moins un produit au panier"); return; }
     onSubmit({ boutique_id: boutiqueId, customer_name: customerName, payment_method: paymentMethod, items: cart });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Boutique & Paiement */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Boutique *</Label>
           <Select value={boutiqueId} onValueChange={setBoutiqueId}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-            <SelectContent>{boutiques.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              {boutiques.map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
@@ -255,40 +393,105 @@ function NewSaleForm({ products, boutiques, onSubmit, loading }: { products: any
           </Select>
         </div>
       </div>
+
+      {/* Client */}
       <div className="space-y-2">
         <Label>Nom du client (optionnel)</Label>
-        <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+        <Input
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Ex: Aminata Koné"
+        />
       </div>
+
+      {/* Panier */}
       <div className="border border-border rounded-lg p-3 space-y-3">
         <Label className="text-sm font-semibold">Ajouter des produits</Label>
-        <div className="flex gap-2">
-          <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-            <SelectTrigger className="flex-1"><SelectValue placeholder="Produit" /></SelectTrigger>
-            <SelectContent>{filteredProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} (stock: {p.stock_quantity})</SelectItem>)}</SelectContent>
-          </Select>
-          <Input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="w-20" />
-          <Button type="button" variant="secondary" onClick={addToCart} disabled={!selectedProduct}><Plus className="h-4 w-4" /></Button>
+
+        <div className="flex gap-2 items-end">
+          <div className="flex-1 space-y-1">
+            <Label className="text-xs text-muted-foreground">Produit</Label>
+            <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+              <SelectTrigger><SelectValue placeholder="Choisir un produit" /></SelectTrigger>
+              <SelectContent>
+                {products.length === 0 ? (
+                  <SelectItem value="__empty__" disabled>Aucun produit en stock</SelectItem>
+                ) : (
+                  products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {formatCurrency(Number(p.selling_price))} (stock: {p.stock_quantity})
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-20 space-y-1">
+            <Label className="text-xs text-muted-foreground">Qté</Label>
+            <Input
+              type="number"
+              min="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={addToCart}
+            disabled={!selectedProduct}
+            className="whitespace-nowrap"
+          >
+            + Ajouter
+          </Button>
         </div>
+
+        {/* Message si panier vide */}
+        {cart.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-2 border border-dashed border-border rounded-md">
+            Sélectionnez un produit puis cliquez sur "+ Ajouter"
+          </p>
+        )}
+
+        {/* Articles dans le panier */}
         {cart.length > 0 && (
           <div className="space-y-2">
             {cart.map((item) => (
-              <div key={item.product_id} className="flex items-center justify-between text-sm bg-muted rounded-md px-3 py-2">
-                <div><span className="font-medium">{item.name}</span><span className="text-muted-foreground ml-2">x{item.quantity}</span></div>
+              <div
+                key={item.product_id}
+                className="flex items-center justify-between text-sm bg-muted rounded-md px-3 py-2"
+              >
+                <div>
+                  <span className="font-medium">{item.name}</span>
+                  <span className="text-muted-foreground ml-2">x{item.quantity}</span>
+                </div>
                 <div className="flex items-center gap-2">
-                  <span>{formatCurrency(item.quantity * item.unit_price)}</span>
-                  <button type="button" onClick={() => setCart(cart.filter((c) => c.product_id !== item.product_id))}><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                  <span className="font-medium">{formatCurrency(item.quantity * item.unit_price)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCart(cart.filter((c) => c.product_id !== item.product_id))}
+                    className="hover:opacity-70 transition-opacity"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </button>
                 </div>
               </div>
             ))}
-            <div className="text-right font-bold text-sm pt-2 border-t border-border">Total: {formatCurrency(total)}</div>
+            <div className="text-right font-bold text-sm pt-2 border-t border-border">
+              Total : {formatCurrency(total)}
+            </div>
           </div>
         )}
       </div>
-      <Button type="submit" className="w-full" disabled={loading || cart.length === 0}>
+
+      {/* Bouton enregistrer */}
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={loading || cart.length === 0 || !boutiqueId || !paymentMethod}
+      >
         <ShoppingCart className="h-4 w-4 mr-2" />
         {loading ? "Enregistrement..." : `Enregistrer — ${formatCurrency(total)}`}
       </Button>
     </form>
   );
 }
-  
