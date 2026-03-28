@@ -54,11 +54,16 @@ export default function Sales() {
   const { data: products } = useQuery({
     queryKey: ["products-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("products")
-        .select("id, name, selling_price, stock_quantity, boutique_id, boutiques(id, name)")
+        .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name)")
         .gt("stock_quantity", 0)
         .order("name");
+      if (error) {
+        console.error("Erreur chargement produits:", error);
+        return [];
+      }
+      console.log("Produits chargés:", data);
       return data ?? [];
     },
   });
@@ -80,7 +85,6 @@ export default function Sales() {
     }) => {
       const total = saleData.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
-      // Vérification stock avant insertion
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
@@ -115,7 +119,6 @@ export default function Sales() {
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Décrémentation du stock
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
@@ -155,11 +158,7 @@ export default function Sales() {
     doc.setFontSize(18);
     doc.text("Ventes — Mabelya", 14, 22);
     doc.setFontSize(10);
-    doc.text(
-      `${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`,
-      14,
-      30
-    );
+    doc.text(`${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
     const rows = (filtered ?? []).map((s) => [
       s.invoice_number,
       (s.boutiques as any)?.name ?? "—",
@@ -210,38 +209,19 @@ export default function Sales() {
         </div>
       </div>
 
-      {/* Filtres */}
       <div className="flex flex-wrap gap-3">
-        <Select
-          value={filterCountry}
-          onValueChange={(v) => {
-            setFilterCountry(v);
-            setFilterBoutique("all");
-          }}
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Pays" />
-          </SelectTrigger>
+        <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tous pays</SelectItem>
-            {countries?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
+            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterBoutique} onValueChange={setFilterBoutique}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Boutique" />
-          </SelectTrigger>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes boutiques</SelectItem>
-            {filteredBoutiques?.map((b) => (
-              <SelectItem key={b.id} value={b.id}>
-                {b.name}
-              </SelectItem>
-            ))}
+            {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -262,47 +242,25 @@ export default function Sales() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Chargement...
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-mono text-xs">{s.invoice_number}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">
-                      {(s.boutiques as any)?.name}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">
-                      {(s.boutiques as any)?.countries?.name}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">
-                      {s.customer_name ?? "—"}
-                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{(s.boutiques as any)?.countries?.name}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
-                        {s.payment_method === "cash"
-                          ? "Espèces"
-                          : s.payment_method === "mobile_money"
-                          ? "Mobile Money"
-                          : "Virement"}
+                        {s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium text-sm">
-                      {formatCurrency(Number(s.total_amount))}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                      {new Date(s.created_at).toLocaleDateString("fr-FR")}
-                    </TableCell>
+                    <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString("fr-FR")}</TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Aucune vente
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune vente</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -330,28 +288,56 @@ function NewSaleForm({
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
 
+  // Récupère le prix — essaie selling_price, puis purchase_price, puis 0
+  const getPrice = (product: any): number => {
+    const price = Number(product.selling_price ?? product.purchase_price ?? 0);
+    return isNaN(price) ? 0 : price;
+  };
+
   const addToCart = () => {
+    console.log("addToCart appelé — selectedProduct:", selectedProduct, "qty:", qty);
     const product = products.find((p) => p.id === selectedProduct);
-    if (!product) return;
+    console.log("Produit trouvé:", product);
+
+    if (!product) {
+      toast.error("Veuillez sélectionner un produit");
+      return;
+    }
     const qtyNum = Number(qty);
-    if (qtyNum <= 0) { toast.error("La quantité doit être supérieure à 0"); return; }
-    if (qtyNum > product.stock_quantity) { toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`); return; }
+    if (!qtyNum || qtyNum <= 0) {
+      toast.error("La quantité doit être supérieure à 0");
+      return;
+    }
+    if (qtyNum > product.stock_quantity) {
+      toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`);
+      return;
+    }
+
+    const unitPrice = getPrice(product);
     const existing = cart.find((c) => c.product_id === selectedProduct);
+
     if (existing) {
       const newQty = existing.quantity + qtyNum;
-      if (newQty > product.stock_quantity) { toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`); return; }
-      setCart(cart.map((c) => c.product_id === selectedProduct ? { ...c, quantity: newQty } : c));
+      if (newQty > product.stock_quantity) {
+        toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`);
+        return;
+      }
+      setCart((prev) => prev.map((c) =>
+        c.product_id === selectedProduct ? { ...c, quantity: newQty } : c
+      ));
     } else {
-      setCart([
-        ...cart,
+      setCart((prev) => [
+        ...prev,
         {
           product_id: product.id,
           name: product.name,
           quantity: qtyNum,
-          unit_price: Number(product.selling_price),
+          unit_price: unitPrice,
         },
       ]);
     }
+
+    toast.success(`${product.name} ajouté au panier !`);
     setSelectedProduct("");
     setQty("1");
   };
@@ -406,49 +392,64 @@ function NewSaleForm({
 
       {/* Panier */}
       <div className="border border-border rounded-lg p-3 space-y-3">
-        <Label className="text-sm font-semibold">Ajouter des produits</Label>
+        <Label className="text-sm font-semibold">
+          Ajouter des produits
+          {products.length > 0 && (
+            <span className="text-xs font-normal text-muted-foreground ml-2">
+              ({products.length} en stock)
+            </span>
+          )}
+        </Label>
 
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 space-y-1">
-            <Label className="text-xs text-muted-foreground">Produit</Label>
-            <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-              <SelectTrigger><SelectValue placeholder="Choisir un produit" /></SelectTrigger>
-              <SelectContent>
-                {products.length === 0 ? (
-                  <SelectItem value="__empty__" disabled>Aucun produit en stock</SelectItem>
-                ) : (
-                  products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} — {formatCurrency(Number(p.selling_price))} (stock: {p.stock_quantity})
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-20 space-y-1">
-            <Label className="text-xs text-muted-foreground">Qté</Label>
-            <Input
-              type="number"
-              min="1"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-            />
-          </div>
+        {/* Select produit pleine largeur */}
+        <Select
+          value={selectedProduct}
+          onValueChange={(v) => {
+            console.log("Produit sélectionné:", v);
+            setSelectedProduct(v);
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Choisir un produit" />
+          </SelectTrigger>
+          <SelectContent>
+            {products.length === 0 ? (
+              <SelectItem value="__empty__" disabled>Aucun produit en stock</SelectItem>
+            ) : (
+              products.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name} — {formatCurrency(getPrice(p))} (stock: {p.stock_quantity})
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+
+        {/* Quantité + bouton sur même ligne */}
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            min="1"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            className="w-24"
+            placeholder="Qté"
+          />
           <Button
             type="button"
             onClick={addToCart}
             disabled={!selectedProduct}
-            className="whitespace-nowrap"
+            className="flex-1"
           >
-            + Ajouter
+            <Plus className="h-4 w-4 mr-1" />
+            Ajouter au panier
           </Button>
         </div>
 
-        {/* Message si panier vide */}
+        {/* Panier vide */}
         {cart.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-2 border border-dashed border-border rounded-md">
-            Sélectionnez un produit puis cliquez sur "+ Ajouter"
+          <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border rounded-md">
+            Sélectionnez un produit puis cliquez "Ajouter au panier"
           </p>
         )}
 
@@ -468,7 +469,7 @@ function NewSaleForm({
                   <span className="font-medium">{formatCurrency(item.quantity * item.unit_price)}</span>
                   <button
                     type="button"
-                    onClick={() => setCart(cart.filter((c) => c.product_id !== item.product_id))}
+                    onClick={() => setCart((prev) => prev.filter((c) => c.product_id !== item.product_id))}
                     className="hover:opacity-70 transition-opacity"
                   >
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
