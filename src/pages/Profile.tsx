@@ -17,15 +17,13 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>((profile as any)?.avatar_url ?? null);
   const [saving, setSaving] = useState(false);
 
-  // Changement email
-  const [newEmail, setNewEmail] = useState(user?.email ?? "");
+  // Changement email — initialisé vide pour forcer la saisie
+  const [newEmail, setNewEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
 
   // Changement mot de passe
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
@@ -43,6 +41,10 @@ export default function Profile() {
   // Sauvegarde infos de base
   const handleSave = async () => {
     if (!user) return;
+    if (!fullName.trim()) {
+      toast.error("Le nom complet est obligatoire");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
@@ -54,7 +56,7 @@ export default function Profile() {
       .eq("user_id", user.id);
     setSaving(false);
     if (error) {
-      toast.error("Erreur lors de la mise à jour du profil");
+      toast.error("Erreur lors de la mise à jour : " + error.message);
     } else {
       toast.success("Profil mis à jour avec succès !");
     }
@@ -62,17 +64,26 @@ export default function Profile() {
 
   // Changement email
   const handleEmailChange = async () => {
-    if (!newEmail || newEmail === user?.email) {
-      toast.error("Veuillez entrer un nouvel email différent");
+    if (!newEmail.trim()) {
+      toast.error("Veuillez entrer un nouvel email");
+      return;
+    }
+    if (newEmail.trim() === user?.email) {
+      toast.error("Le nouvel email doit être différent de l'email actuel");
+      return;
+    }
+    if (!newEmail.includes("@")) {
+      toast.error("Veuillez entrer un email valide");
       return;
     }
     setSavingEmail(true);
-    const { error } = await supabase.auth.updateUser({ email: newEmail });
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
     setSavingEmail(false);
     if (error) {
-      toast.error(error.message);
+      toast.error("Erreur : " + error.message);
     } else {
       toast.success("Email mis à jour ! Vérifiez votre boîte mail pour confirmer.");
+      setNewEmail("");
     }
   };
 
@@ -94,10 +105,9 @@ export default function Profile() {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPwd(false);
     if (error) {
-      toast.error(error.message);
+      toast.error("Erreur : " + error.message);
     } else {
       toast.success("Mot de passe changé avec succès !");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     }
@@ -108,7 +118,6 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Vérification taille et type
     if (file.size > 2 * 1024 * 1024) {
       toast.error("La photo ne doit pas dépasser 2 Mo");
       return;
@@ -120,7 +129,6 @@ export default function Profile() {
 
     setUploadingPhoto(true);
 
-    // Upload dans Supabase Storage
     const fileExt = file.name.split(".").pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
     const filePath = `avatars/${fileName}`;
@@ -130,19 +138,16 @@ export default function Profile() {
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      // Si le bucket n'existe pas, utiliser URL locale temporaire
       const localUrl = URL.createObjectURL(file);
       setAvatarUrl(localUrl);
       setUploadingPhoto(false);
-      toast.error("Erreur upload — photo affichée localement uniquement");
+      toast.error("Erreur upload storage — photo affichée localement");
       return;
     }
 
-    // Récupérer l'URL publique
     const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
     const publicUrl = data.publicUrl;
 
-    // Sauvegarder dans profiles
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
@@ -183,7 +188,6 @@ export default function Profile() {
                   <User className="h-10 w-10 text-primary" />
                 )}
               </div>
-              {/* Bouton changer photo */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -226,7 +230,7 @@ export default function Profile() {
 
           {/* Nom complet */}
           <div>
-            <label className="text-sm font-medium mb-2 block">Nom complet</label>
+            <label className="text-sm font-medium mb-2 block">Nom complet *</label>
             <Input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -237,8 +241,10 @@ export default function Profile() {
 
           {/* Téléphone */}
           <div>
-            <label className="text-sm font-medium mb-2 block flex items-center gap-1">
-              <Phone className="h-3.5 w-3.5" /> Numéro de téléphone
+            <label className="text-sm font-medium mb-2 block">
+              <span className="flex items-center gap-1">
+                <Phone className="h-3.5 w-3.5" /> Numéro de téléphone
+              </span>
             </label>
             <Input
               value={phone}
@@ -264,34 +270,54 @@ export default function Profile() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Email actuel en lecture seule */}
           <div>
             <label className="text-sm font-medium mb-2 block">Email actuel</label>
             <Input
               value={user?.email ?? ""}
               disabled
-              className="rounded-xl bg-muted"
+              className="rounded-xl bg-muted text-muted-foreground"
             />
           </div>
+
+          {/* Nouvel email — champ vide par défaut */}
           <div>
             <label className="text-sm font-medium mb-2 block">Nouvel email</label>
             <Input
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               className="rounded-xl"
-              placeholder="nouveau@email.com"
+              placeholder="Entrez votre nouvel email"
               type="email"
+              autoComplete="off"
             />
+            {newEmail && newEmail === user?.email && (
+              <p className="text-xs text-red-500 mt-1">
+                ✗ Ce doit être un email différent de l'actuel
+              </p>
+            )}
+            {newEmail && newEmail !== user?.email && newEmail.includes("@") && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ Nouvel email valide
+              </p>
+            )}
           </div>
+
           <Button
             onClick={handleEmailChange}
-            disabled={savingEmail || newEmail === user?.email}
+            disabled={
+              savingEmail ||
+              !newEmail.trim() ||
+              newEmail.trim() === user?.email ||
+              !newEmail.includes("@")
+            }
             variant="outline"
             className="rounded-xl w-full"
           >
             {savingEmail ? "Mise à jour..." : "Changer l'email"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Un email de confirmation sera envoyé à la nouvelle adresse.
+            ℹ️ Un email de confirmation sera envoyé à la nouvelle adresse.
           </p>
         </CardContent>
       </Card>
@@ -305,6 +331,7 @@ export default function Profile() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Nouveau mot de passe */}
           <div>
             <label className="text-sm font-medium mb-2 block">Nouveau mot de passe</label>
             <div className="relative">
@@ -325,6 +352,7 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* Confirmer mot de passe */}
           <div>
             <label className="text-sm font-medium mb-2 block">Confirmer le mot de passe</label>
             <div className="relative">
@@ -343,15 +371,16 @@ export default function Profile() {
                 {showConfirmPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {/* Indicateur correspondance */}
             {confirmPassword && (
               <p className={`text-xs mt-1 ${newPassword === confirmPassword ? "text-green-600" : "text-red-500"}`}>
-                {newPassword === confirmPassword ? "✓ Les mots de passe correspondent" : "✗ Les mots de passe ne correspondent pas"}
+                {newPassword === confirmPassword
+                  ? "✓ Les mots de passe correspondent"
+                  : "✗ Les mots de passe ne correspondent pas"}
               </p>
             )}
           </div>
 
-          {/* Indicateur force mot de passe */}
+          {/* Indicateur force */}
           {newPassword && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Force du mot de passe :</p>
@@ -359,7 +388,7 @@ export default function Profile() {
                 {[1, 2, 3, 4].map((level) => (
                   <div
                     key={level}
-                    className={`h-1.5 flex-1 rounded-full ${
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
                       newPassword.length >= level * 3
                         ? level <= 1 ? "bg-red-400"
                           : level <= 2 ? "bg-orange-400"
@@ -378,7 +407,13 @@ export default function Profile() {
 
           <Button
             onClick={handlePasswordChange}
-            disabled={savingPwd || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+            disabled={
+              savingPwd ||
+              !newPassword ||
+              !confirmPassword ||
+              newPassword !== confirmPassword ||
+              newPassword.length < 6
+            }
             variant="outline"
             className="rounded-xl w-full"
           >
