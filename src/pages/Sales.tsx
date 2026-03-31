@@ -63,7 +63,6 @@ export default function Sales() {
         console.error("Erreur chargement produits:", error);
         return [];
       }
-      console.log("Produits chargés:", data);
       return data ?? [];
     },
   });
@@ -71,7 +70,10 @@ export default function Sales() {
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
     queryFn: async () => {
-      const { data } = await supabase.from("boutiques").select("id, name, country_id, countries(name)").order("name");
+      const { data } = await supabase
+        .from("boutiques")
+        .select("id, name, country_id, countries(name)")
+        .order("name");
       return data ?? [];
     },
   });
@@ -85,6 +87,7 @@ export default function Sales() {
     }) => {
       const total = saleData.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
+      // Vérification stock avant insertion
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
@@ -92,10 +95,11 @@ export default function Sales() {
           .eq("id", item.product_id)
           .single();
         if (!product || product.stock_quantity < item.quantity) {
-          throw new Error(`Stock insuffisant pour "${product?.name ?? item.product_id}"`);
+          throw new Error(`Stock insuffisant pour "${product?.name ?? item.product_id}" — seulement ${product?.stock_quantity ?? 0} disponible(s)`);
         }
       }
 
+      // Créer la vente
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert({
@@ -109,6 +113,7 @@ export default function Sales() {
         .single();
       if (saleError) throw saleError;
 
+      // Insérer les articles — le trigger Supabase décrémente le stock automatiquement
       const items = saleData.items.map((i) => ({
         sale_id: sale.id,
         product_id: i.product_id,
@@ -119,19 +124,8 @@ export default function Sales() {
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
 
-      for (const item of saleData.items) {
-        const { data: product } = await supabase
-          .from("products")
-          .select("stock_quantity")
-          .eq("id", item.product_id)
-          .single();
-        if (product) {
-          await supabase
-            .from("products")
-            .update({ stock_quantity: product.stock_quantity - item.quantity })
-            .eq("id", item.product_id);
-        }
-      }
+      // ✅ PAS de décrémentation manuelle ici
+      // Le trigger "decrease_stock_trigger" sur sale_items s'en charge automatiquement
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -163,7 +157,7 @@ export default function Sales() {
       s.invoice_number,
       (s.boutiques as any)?.name ?? "—",
       s.customer_name ?? "—",
-      s.payment_method,
+      s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement",
       formatCurrency(Number(s.total_amount)),
       new Date(s.created_at).toLocaleDateString("fr-FR"),
     ]);
@@ -209,6 +203,7 @@ export default function Sales() {
         </div>
       </div>
 
+      {/* Filtres */}
       <div className="flex flex-wrap gap-3">
         <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
@@ -256,7 +251,9 @@ export default function Sales() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                      {new Date(s.created_at).toLocaleDateString("fr-FR")}
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
@@ -288,26 +285,17 @@ function NewSaleForm({
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
 
-  // Récupère le prix — essaie selling_price, puis purchase_price, puis 0
   const getPrice = (product: any): number => {
     const price = Number(product.selling_price ?? product.purchase_price ?? 0);
     return isNaN(price) ? 0 : price;
   };
 
   const addToCart = () => {
-    console.log("addToCart appelé — selectedProduct:", selectedProduct, "qty:", qty);
     const product = products.find((p) => p.id === selectedProduct);
-    console.log("Produit trouvé:", product);
+    if (!product) { toast.error("Veuillez sélectionner un produit"); return; }
 
-    if (!product) {
-      toast.error("Veuillez sélectionner un produit");
-      return;
-    }
     const qtyNum = Number(qty);
-    if (!qtyNum || qtyNum <= 0) {
-      toast.error("La quantité doit être supérieure à 0");
-      return;
-    }
+    if (!qtyNum || qtyNum <= 0) { toast.error("La quantité doit être supérieure à 0"); return; }
     if (qtyNum > product.stock_quantity) {
       toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`);
       return;
@@ -326,15 +314,12 @@ function NewSaleForm({
         c.product_id === selectedProduct ? { ...c, quantity: newQty } : c
       ));
     } else {
-      setCart((prev) => [
-        ...prev,
-        {
-          product_id: product.id,
-          name: product.name,
-          quantity: qtyNum,
-          unit_price: unitPrice,
-        },
-      ]);
+      setCart((prev) => [...prev, {
+        product_id: product.id,
+        name: product.name,
+        quantity: qtyNum,
+        unit_price: unitPrice,
+      }]);
     }
 
     toast.success(`${product.name} ajouté au panier !`);
@@ -354,16 +339,13 @@ function NewSaleForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Boutique & Paiement */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Boutique *</Label>
           <Select value={boutiqueId} onValueChange={setBoutiqueId}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
             <SelectContent>
-              {boutiques.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
+              {boutiques.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -380,7 +362,6 @@ function NewSaleForm({
         </div>
       </div>
 
-      {/* Client */}
       <div className="space-y-2">
         <Label>Nom du client (optionnel)</Label>
         <Input
@@ -390,7 +371,6 @@ function NewSaleForm({
         />
       </div>
 
-      {/* Panier */}
       <div className="border border-border rounded-lg p-3 space-y-3">
         <Label className="text-sm font-semibold">
           Ajouter des produits
@@ -401,14 +381,7 @@ function NewSaleForm({
           )}
         </Label>
 
-        {/* Select produit pleine largeur */}
-        <Select
-          value={selectedProduct}
-          onValueChange={(v) => {
-            console.log("Produit sélectionné:", v);
-            setSelectedProduct(v);
-          }}
-        >
+        <Select value={selectedProduct} onValueChange={setSelectedProduct}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Choisir un produit" />
           </SelectTrigger>
@@ -425,7 +398,6 @@ function NewSaleForm({
           </SelectContent>
         </Select>
 
-        {/* Quantité + bouton sur même ligne */}
         <div className="flex gap-2">
           <Input
             type="number"
@@ -446,21 +418,16 @@ function NewSaleForm({
           </Button>
         </div>
 
-        {/* Panier vide */}
         {cart.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border rounded-md">
             Sélectionnez un produit puis cliquez "Ajouter au panier"
           </p>
         )}
 
-        {/* Articles dans le panier */}
         {cart.length > 0 && (
           <div className="space-y-2">
             {cart.map((item) => (
-              <div
-                key={item.product_id}
-                className="flex items-center justify-between text-sm bg-muted rounded-md px-3 py-2"
-              >
+              <div key={item.product_id} className="flex items-center justify-between text-sm bg-muted rounded-md px-3 py-2">
                 <div>
                   <span className="font-medium">{item.name}</span>
                   <span className="text-muted-foreground ml-2">x{item.quantity}</span>
@@ -484,7 +451,6 @@ function NewSaleForm({
         )}
       </div>
 
-      {/* Bouton enregistrer */}
       <Button
         type="submit"
         className="w-full"
