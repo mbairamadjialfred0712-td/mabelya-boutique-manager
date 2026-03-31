@@ -28,7 +28,11 @@ export default function Sales() {
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+
+  const isSuperAdmin = hasRole("super_admin");
+  const isAdminBoutique = hasRole("admin_boutique");
+  const isVendeur = !isSuperAdmin && !isAdminBoutique;
 
   const { data: countries } = useQuery({
     queryKey: ["countries"],
@@ -39,13 +43,20 @@ export default function Sales() {
   });
 
   const { data: sales, isLoading } = useQuery({
-    queryKey: ["sales"],
+    queryKey: ["sales", isVendeur ? user?.id : "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sales")
         .select("*, boutiques(name, country_id, countries(name)), sale_items(quantity, unit_price, products(name))")
         .order("created_at", { ascending: false })
         .limit(100);
+
+      // Vendeur voit uniquement ses propres ventes
+      if (isVendeur && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -59,10 +70,7 @@ export default function Sales() {
         .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name)")
         .gt("stock_quantity", 0)
         .order("name");
-      if (error) {
-        console.error("Erreur chargement produits:", error);
-        return [];
-      }
+      if (error) return [];
       return data ?? [];
     },
   });
@@ -87,7 +95,6 @@ export default function Sales() {
     }) => {
       const total = saleData.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
-      // Vérification stock avant insertion
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
@@ -99,7 +106,6 @@ export default function Sales() {
         }
       }
 
-      // Créer la vente
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert({
@@ -113,7 +119,6 @@ export default function Sales() {
         .single();
       if (saleError) throw saleError;
 
-      // Insérer les articles — le trigger Supabase décrémente le stock automatiquement
       const items = saleData.items.map((i) => ({
         sale_id: sale.id,
         product_id: i.product_id,
@@ -123,9 +128,6 @@ export default function Sales() {
       }));
       const { error: itemsError } = await supabase.from("sale_items").insert(items);
       if (itemsError) throw itemsError;
-
-      // ✅ PAS de décrémentation manuelle ici
-      // Le trigger "decrease_stock_trigger" sur sale_items s'en charge automatiquement
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -147,10 +149,14 @@ export default function Sales() {
     return matchCountry && matchBoutique;
   });
 
+  // Stats vendeur
+  const totalVentes = filtered?.length ?? 0;
+  const totalMontant = filtered?.reduce((sum, s) => sum + Number(s.total_amount), 0) ?? 0;
+
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text("Ventes — Mabelya", 14, 22);
+    doc.text(isVendeur ? "Mes ventes — Mabelya" : "Ventes — Mabelya", 14, 22);
     doc.setFontSize(10);
     doc.text(`${filtered?.length ?? 0} ventes — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
     const rows = (filtered ?? []).map((s) => [
@@ -168,15 +174,17 @@ export default function Sales() {
       styles: { fontSize: 8 },
       headStyles: { fillColor: [200, 50, 80] },
     });
-    doc.save("ventes-mabelya.pdf");
+    doc.save(isVendeur ? "mes-ventes-mabelya.pdf" : "ventes-mabelya.pdf");
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold">Ventes</h1>
-          <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} ventes</p>
+          <h1 className="text-2xl font-display font-bold">
+            {isVendeur ? "Mes ventes" : "Ventes"}
+          </h1>
+          <p className="text-muted-foreground text-sm">{totalVentes} vente{totalVentes > 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportPDF}>
@@ -203,23 +211,39 @@ export default function Sales() {
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="flex flex-wrap gap-3">
-        <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous pays</SelectItem>
-            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterBoutique} onValueChange={setFilterBoutique}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes boutiques</SelectItem>
-            {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Stats rapides pour vendeur */}
+      {isVendeur && (
+        <div className="grid grid-cols-2 gap-4">
+          <Card><CardContent className="pt-4 pb-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Mes ventes</p>
+            <p className="text-2xl font-display font-bold">{totalVentes}</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Mon chiffre d'affaires</p>
+            <p className="text-2xl font-display font-bold text-primary">{formatCurrency(totalMontant)}</p>
+          </CardContent></Card>
+        </div>
+      )}
+
+      {/* Filtres — cachés pour vendeur */}
+      {!isVendeur && (
+        <div className="flex flex-wrap gap-3">
+          <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
+            <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous pays</SelectItem>
+              {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterBoutique} onValueChange={setFilterBoutique}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Boutique" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes boutiques</SelectItem>
+              {filteredBoutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -228,7 +252,7 @@ export default function Sales() {
               <TableRow>
                 <TableHead>Facture</TableHead>
                 <TableHead className="hidden md:table-cell">Boutique</TableHead>
-                <TableHead className="hidden lg:table-cell">Pays</TableHead>
+                {!isVendeur && <TableHead className="hidden lg:table-cell">Pays</TableHead>}
                 <TableHead className="hidden md:table-cell">Client</TableHead>
                 <TableHead>Paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
@@ -243,7 +267,7 @@ export default function Sales() {
                   <TableRow key={s.id}>
                     <TableCell className="font-mono text-xs">{s.invoice_number}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">{(s.boutiques as any)?.countries?.name}</TableCell>
+                    {!isVendeur && <TableCell className="hidden lg:table-cell text-sm">{(s.boutiques as any)?.countries?.name}</TableCell>}
                     <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
@@ -257,7 +281,11 @@ export default function Sales() {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune vente</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    {isVendeur ? "Vous n'avez pas encore enregistré de vente" : "Aucune vente"}
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -293,17 +321,14 @@ function NewSaleForm({
   const addToCart = () => {
     const product = products.find((p) => p.id === selectedProduct);
     if (!product) { toast.error("Veuillez sélectionner un produit"); return; }
-
     const qtyNum = Number(qty);
     if (!qtyNum || qtyNum <= 0) { toast.error("La quantité doit être supérieure à 0"); return; }
     if (qtyNum > product.stock_quantity) {
       toast.error(`Stock insuffisant — seulement ${product.stock_quantity} disponible(s)`);
       return;
     }
-
     const unitPrice = getPrice(product);
     const existing = cart.find((c) => c.product_id === selectedProduct);
-
     if (existing) {
       const newQty = existing.quantity + qtyNum;
       if (newQty > product.stock_quantity) {
@@ -321,7 +346,6 @@ function NewSaleForm({
         unit_price: unitPrice,
       }]);
     }
-
     toast.success(`${product.name} ajouté au panier !`);
     setSelectedProduct("");
     setQty("1");
@@ -380,7 +404,6 @@ function NewSaleForm({
             </span>
           )}
         </Label>
-
         <Select value={selectedProduct} onValueChange={setSelectedProduct}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Choisir un produit" />
@@ -397,33 +420,17 @@ function NewSaleForm({
             )}
           </SelectContent>
         </Select>
-
         <div className="flex gap-2">
-          <Input
-            type="number"
-            min="1"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            className="w-24"
-            placeholder="Qté"
-          />
-          <Button
-            type="button"
-            onClick={addToCart}
-            disabled={!selectedProduct}
-            className="flex-1"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Ajouter au panier
+          <Input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="w-24" placeholder="Qté" />
+          <Button type="button" onClick={addToCart} disabled={!selectedProduct} className="flex-1">
+            <Plus className="h-4 w-4 mr-1" /> Ajouter au panier
           </Button>
         </div>
-
         {cart.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border rounded-md">
             Sélectionnez un produit puis cliquez "Ajouter au panier"
           </p>
         )}
-
         {cart.length > 0 && (
           <div className="space-y-2">
             {cart.map((item) => (
@@ -434,11 +441,7 @@ function NewSaleForm({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{formatCurrency(item.quantity * item.unit_price)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCart((prev) => prev.filter((c) => c.product_id !== item.product_id))}
-                    className="hover:opacity-70 transition-opacity"
-                  >
+                  <button type="button" onClick={() => setCart((prev) => prev.filter((c) => c.product_id !== item.product_id))} className="hover:opacity-70 transition-opacity">
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </button>
                 </div>
@@ -451,11 +454,7 @@ function NewSaleForm({
         )}
       </div>
 
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={loading || cart.length === 0 || !boutiqueId || !paymentMethod}
-      >
+      <Button type="submit" className="w-full" disabled={loading || cart.length === 0 || !boutiqueId || !paymentMethod}>
         <ShoppingCart className="h-4 w-4 mr-2" />
         {loading ? "Enregistrement..." : `Enregistrer — ${formatCurrency(total)}`}
       </Button>
