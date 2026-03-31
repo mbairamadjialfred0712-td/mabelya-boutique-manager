@@ -24,8 +24,12 @@ export default function Stock() {
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const queryClient = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
+
   const isSuperAdmin = hasRole("super_admin");
+  const isAdminBoutique = hasRole("admin_boutique");
+  const isVendeur = !isSuperAdmin && !isAdminBoutique;
+  const canManage = isSuperAdmin || isAdminBoutique;
 
   const { data: countries } = useQuery({
     queryKey: ["countries"],
@@ -36,12 +40,19 @@ export default function Stock() {
   });
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", isVendeur ? user?.id : "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("products")
         .select("*, categories(name), boutiques(name, country_id, countries(name))")
         .order("created_at", { ascending: false });
+
+      // Vendeur voit uniquement les produits en stock
+      if (isVendeur) {
+        query = query.gt("stock_quantity", 0);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -102,7 +113,9 @@ export default function Stock() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const filteredBoutiques = boutiques?.filter((b) => filterCountry === "all" || (b as any).country_id === filterCountry);
+  const filteredBoutiques = boutiques?.filter(
+    (b) => filterCountry === "all" || (b as any).country_id === filterCountry
+  );
 
   const filtered = products?.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -118,8 +131,12 @@ export default function Stock() {
     doc.setFontSize(10);
     doc.text(`${filtered?.length ?? 0} produits — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
     const rows = (filtered ?? []).map((p) => [
-      p.name, (p.categories as any)?.name ?? "—", formatCurrency(Number(p.selling_price)),
-      p.stock_quantity, (p.boutiques as any)?.name ?? "—", (p.boutiques as any)?.countries?.name ?? "—",
+      p.name,
+      (p.categories as any)?.name ?? "—",
+      formatCurrency(Number(p.selling_price)),
+      p.stock_quantity,
+      (p.boutiques as any)?.name ?? "—",
+      (p.boutiques as any)?.countries?.name ?? "—",
       new Date(p.created_at).toLocaleDateString("fr-FR"),
       p.stock_quantity > 0 ? "En stock" : "Rupture",
     ]);
@@ -137,28 +154,57 @@ export default function Stock() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold">Gestion du stock</h1>
-          <p className="text-muted-foreground text-sm">{filtered?.length ?? 0} produits</p>
+          <h1 className="text-2xl font-display font-bold">
+            {isVendeur ? "Produits disponibles" : "Gestion du stock"}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {filtered?.length ?? 0} produit{(filtered?.length ?? 0) > 1 ? "s" : ""}
+            {isVendeur && " en stock"}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Ajouter un produit</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle className="font-display">Nouveau produit</DialogTitle></DialogHeader>
-              <AddProductForm categories={categories ?? []} boutiques={boutiques ?? []} onSubmit={(data) => addProduct.mutate(data)} loading={addProduct.isPending} />
-            </DialogContent>
-          </Dialog>
+          <Button variant="outline" size="sm" onClick={exportPDF}>
+            <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
+          {/* Bouton ajouter — uniquement pour admin */}
+          {canManage && (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Ajouter un produit</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="font-display">Nouveau produit</DialogTitle>
+                </DialogHeader>
+                <AddProductForm
+                  categories={categories ?? []}
+                  boutiques={boutiques ?? []}
+                  onSubmit={(data) => addProduct.mutate(data)}
+                  loading={addProduct.isPending}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Message info pour vendeur */}
+      {isVendeur && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
+          ℹ️ Vous voyez uniquement les produits disponibles en stock. Contactez un administrateur pour ajouter ou modifier des produits.
+        </div>
+      )}
+
+      {/* Filtres */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Rechercher un produit..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input
+            placeholder="Rechercher un produit..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
         </div>
         <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterBoutique("all"); }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
@@ -187,46 +233,88 @@ export default function Stock() {
                 <TableHead className="text-right">Stock</TableHead>
                 <TableHead className="hidden lg:table-cell">Boutique</TableHead>
                 <TableHead className="hidden lg:table-cell">Pays</TableHead>
-                <TableHead className="hidden xl:table-cell">Créé le</TableHead>
+                {canManage && <TableHead className="hidden xl:table-cell">Créé le</TableHead>}
                 <TableHead>Statut</TableHead>
-                {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={canManage ? 9 : 7} className="text-center py-8 text-muted-foreground">
+                    Chargement...
+                  </TableCell>
+                </TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                          {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-5 w-5 text-muted-foreground" />}
+                          {p.image_url
+                            ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                            : <Package className="h-5 w-5 text-muted-foreground" />
+                          }
                         </div>
                         <div>
                           <p className="font-medium text-sm">{p.name}</p>
-                          {p.color && <p className="text-xs text-muted-foreground">{p.color}{p.size ? ` • ${p.size}` : ""}</p>}
+                          {p.color && (
+                            <p className="text-xs text-muted-foreground">
+                              {p.color}{p.size ? ` • ${p.size}` : ""}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">{(p.categories as any)?.name ?? "—"}</TableCell>
-                    <TableCell className="text-right text-sm">{formatCurrency(Number(p.selling_price))}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"}>{p.stock_quantity}</Badge>
+                    <TableCell className="hidden md:table-cell text-sm">
+                      {(p.categories as any)?.name ?? "—"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">{(p.boutiques as any)?.name}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">{(p.boutiques as any)?.countries?.name}</TableCell>
-                    <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      {formatCurrency(Number(p.selling_price))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"}>
+                        {p.stock_quantity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">
+                      {(p.boutiques as any)?.name}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">
+                      {(p.boutiques as any)?.countries?.name}
+                    </TableCell>
+                    {canManage && (
+                      <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
+                        {new Date(p.created_at).toLocaleDateString("fr-FR")}
+                      </TableCell>
+                    )}
                     <TableCell>
-                      <Badge variant={p.stock_quantity > 0 ? "secondary" : "destructive"} className="text-xs">
+                      <Badge
+                        variant={p.stock_quantity > 0 ? "secondary" : "destructive"}
+                        className="text-xs"
+                      >
                         {p.stock_quantity > 0 ? "En stock" : "Rupture"}
                       </Badge>
                     </TableCell>
-                    {isSuperAdmin && (
+                    {/* Actions — uniquement pour admin */}
+                    {canManage && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditProduct(p)}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => { if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id); }}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditProduct(p)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id);
+                            }}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -235,18 +323,25 @@ export default function Stock() {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Aucun produit trouvé</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={canManage ? 9 : 7} className="text-center py-8 text-muted-foreground">
+                    {isVendeur ? "Aucun produit disponible en stock" : "Aucun produit trouvé"}
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {editProduct && (
+      {editProduct && canManage && (
         <EditProductDialog
-          product={editProduct} categories={categories ?? []}
-          open={!!editProduct} onOpenChange={(o) => { if (!o) setEditProduct(null); }}
-          onSubmit={(data) => updateProduct.mutate(data)} loading={updateProduct.isPending}
+          product={editProduct}
+          categories={categories ?? []}
+          open={!!editProduct}
+          onOpenChange={(o) => { if (!o) setEditProduct(null); }}
+          onSubmit={(data) => updateProduct.mutate(data)}
+          loading={updateProduct.isPending}
         />
       )}
     </div>

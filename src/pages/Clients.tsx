@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -26,6 +27,11 @@ export default function Clients() {
   const [filterGender, setFilterGender] = useState<string>("all");
   const [filterAge, setFilterAge] = useState<string>("all");
   const queryClient = useQueryClient();
+  const { hasRole, user } = useAuth();
+
+  const isSuperAdmin = hasRole("super_admin");
+  const isAdminBoutique = hasRole("admin_boutique");
+  const isVendeur = !isSuperAdmin && !isAdminBoutique;
 
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "", country_id: "", boutique_id: "",
@@ -48,16 +54,38 @@ export default function Clients() {
     },
   });
 
-  const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients"],
+  // Récupérer la boutique du vendeur
+  const { data: staffData } = useQuery({
+    queryKey: ["staff-boutique", user?.id],
+    enabled: isVendeur && !!user?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
+        .from("staff")
+        .select("boutique_id, boutiques(id, name)")
+        .eq("id", user!.id)
+        .single();
+      return data;
+    },
+  });
+
+  const { data: clients, isLoading } = useQuery({
+    queryKey: ["clients", isVendeur ? user?.id : "all"],
+    queryFn: async () => {
+      let query = supabase
         .from("clients")
         .select("*, countries(name), boutiques(name, countries(name))")
         .order("created_at", { ascending: false });
+
+      // Vendeur voit uniquement les clients de sa boutique
+      if (isVendeur && staffData?.boutique_id) {
+        query = query.eq("boutique_id", staffData.boutique_id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !isVendeur || !!staffData,
   });
 
   const addClient = useMutation({
@@ -67,7 +95,9 @@ export default function Clients() {
         email: client.email || null,
         phone: client.phone || null,
         country_id: client.country_id || null,
-        boutique_id: client.boutique_id || null,
+        boutique_id: isVendeur && staffData?.boutique_id
+          ? staffData.boutique_id
+          : client.boutique_id || null,
         age_range: client.age_range,
         gender: client.gender,
         status: client.status,
@@ -78,14 +108,18 @@ export default function Clients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       setOpen(false);
-      setForm({ full_name: "", email: "", phone: "", country_id: "", boutique_id: "", age_range: "Non spécifié", gender: "Non spécifié", status: "Actif", notes: "" });
+      setForm({
+        full_name: "", email: "", phone: "", country_id: "", boutique_id: "",
+        age_range: "Non spécifié", gender: "Non spécifié", status: "Actif", notes: "",
+      });
       toast.success("Client ajouté avec succès");
     },
     onError: (err: any) => toast.error(err.message),
   });
 
   const filtered = clients?.filter((c) => {
-    const matchSearch = c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch =
+      c.full_name.toLowerCase().includes(search.toLowerCase()) ||
       (c.email?.toLowerCase().includes(search.toLowerCase()));
     const matchCountry = filterCountry === "all" || c.country_id === filterCountry;
     const matchGender = filterGender === "all" || c.gender === filterGender;
@@ -103,17 +137,10 @@ export default function Clients() {
     doc.text("Liste des Clients — Mabelya", 14, 22);
     doc.setFontSize(10);
     doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
-
     const rows = (filtered ?? []).map((c) => [
-      c.full_name,
-      c.phone ?? "—",
-      (c.countries as any)?.name ?? "—",
-      c.gender,
-      c.age_range,
-      c.status,
-      formatCurrency(Number(c.total_spent)),
+      c.full_name, c.phone ?? "—", (c.countries as any)?.name ?? "—",
+      c.gender, c.age_range, c.status, formatCurrency(Number(c.total_spent)),
     ]);
-
     (doc as any).autoTable({
       startY: 36,
       head: [["Nom", "Téléphone", "Pays", "Sexe", "Âge", "Statut", "Dépenses"]],
@@ -129,9 +156,13 @@ export default function Clients() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" /> Clients
+            <Users className="h-6 w-6" />
+            {isVendeur ? "Mes clients" : "Clients"}
           </h1>
-          <p className="text-muted-foreground text-sm">{totalClients} clients</p>
+          <p className="text-muted-foreground text-sm">
+            {totalClients} client{totalClients > 1 ? "s" : ""}
+            {isVendeur && staffData && ` — ${(staffData.boutiques as any)?.name ?? "ma boutique"}`}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportPDF} size="sm">
@@ -152,7 +183,11 @@ export default function Clients() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1 col-span-2">
                     <Label>Nom complet *</Label>
-                    <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+                    <Input
+                      value={form.full_name}
+                      onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                      required
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Téléphone</Label>
@@ -171,15 +206,18 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label>Boutique</Label>
-                    <Select value={form.boutique_id} onValueChange={(v) => setForm({ ...form, boutique_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                      <SelectContent>
-                        {boutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Boutique — cachée pour le vendeur (auto-assignée) */}
+                  {!isVendeur && (
+                    <div className="space-y-1">
+                      <Label>Boutique</Label>
+                      <Select value={form.boutique_id} onValueChange={(v) => setForm({ ...form, boutique_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
+                        <SelectContent>
+                          {boutiques?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label>Sexe</Label>
                     <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })}>
@@ -217,19 +255,33 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Message info vendeur */}
+      {isVendeur && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
+          ℹ️ Vous voyez uniquement les clients de votre boutique.
+        </div>
+      )}
+
+      {/* Filtres */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Rechercher..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input
+            placeholder="Rechercher..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
         </div>
-        <Select value={filterCountry} onValueChange={setFilterCountry}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous pays</SelectItem>
-            {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {!isVendeur && (
+          <Select value={filterCountry} onValueChange={setFilterCountry}>
+            <SelectTrigger className="w-36"><SelectValue placeholder="Pays" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous pays</SelectItem>
+              {countries?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={filterGender} onValueChange={setFilterGender}>
           <SelectTrigger className="w-32"><SelectValue placeholder="Sexe" /></SelectTrigger>
           <SelectContent>
@@ -248,27 +300,21 @@ export default function Clients() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total clients</p>
-            <p className="text-2xl font-display font-bold">{totalClients}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Dépenses totales</p>
-            <p className="text-2xl font-display font-bold text-primary">{formatCurrency(totalSpent)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Clients VIP</p>
-            <p className="text-2xl font-display font-bold text-warning">{vipCount}</p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Total clients</p>
+          <p className="text-2xl font-display font-bold">{totalClients}</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Dépenses totales</p>
+          <p className="text-2xl font-display font-bold text-primary">{formatCurrency(totalSpent)}</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Clients VIP</p>
+          <p className="text-2xl font-display font-bold text-warning">{vipCount}</p>
+        </CardContent></Card>
       </div>
 
-      {/* Table */}
+      {/* Tableau */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -285,32 +331,53 @@ export default function Clients() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Chargement...
+                  </TableCell>
+                </TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell>
                       <div>
                         <p className="font-medium text-sm">{c.full_name}</p>
-                        {c.email && <p className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</p>}
+                        {c.email && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Mail className="h-3 w-3" />{c.email}
+                          </p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm">
-                      {c.phone ? <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span> : "—"}
+                      {c.phone
+                        ? <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>
+                        : "—"
+                      }
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">{(c.countries as any)?.name ?? "—"}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">
+                      {(c.countries as any)?.name ?? "—"}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{c.gender}</TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{c.age_range}</TableCell>
-                    <TableCell className="text-right text-sm font-medium">{formatCurrency(Number(c.total_spent))}</TableCell>
+                    <TableCell className="text-right text-sm font-medium">
+                      {formatCurrency(Number(c.total_spent))}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant={c.status === "VIP" ? "default" : c.status === "Actif" ? "secondary" : "outline"}>
+                      <Badge
+                        variant={c.status === "VIP" ? "default" : c.status === "Actif" ? "secondary" : "outline"}
+                      >
                         {c.status}
                       </Badge>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun client trouvé</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    {isVendeur ? "Aucun client dans votre boutique" : "Aucun client trouvé"}
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>

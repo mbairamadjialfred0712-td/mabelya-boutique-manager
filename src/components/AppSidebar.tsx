@@ -57,6 +57,12 @@ const navItems: NavItem[] = [
   { title: "Mon Profil", url: "/profile", icon: User },
 ];
 
+const roleLabels: Record<AppRole, string> = {
+  super_admin: "Super Admin",
+  admin_boutique: "Admin Boutique",
+  sales_staff: "Vendeur",
+};
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -67,6 +73,9 @@ export function AppSidebar() {
     if (!item.allowedRoles) return true;
     return item.allowedRoles.some((r) => roles.includes(r));
   });
+
+  const primaryRole = roles[0];
+  const roleLabel = primaryRole ? roleLabels[primaryRole] ?? primaryRole : "";
 
   return (
     <Sidebar collapsible="icon">
@@ -113,9 +122,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-3">
         {!collapsed && profile && (
-          <p className="text-xs text-sidebar-foreground/60 mb-2 truncate px-2">
-            {profile.full_name || "Utilisateur"}
-          </p>
+          <div className="mb-2 px-2">
+            <p className="text-xs text-sidebar-foreground/60 truncate">{profile.full_name || "Utilisateur"}</p>
+            {roleLabel && (
+              <p className="text-[10px] font-medium text-primary/70 uppercase tracking-wider">{roleLabel}</p>
+            )}
+          </div>
         )}
         <SidebarMenu>
           <SidebarMenuItem>
