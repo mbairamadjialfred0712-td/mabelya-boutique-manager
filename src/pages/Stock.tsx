@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, Pencil, Trash2, Download } from "lucide-react";
+import { Plus, Package, Search, Pencil, Archive, ArchiveRestore, Download } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import { AddProductForm } from "@/components/stock/AddProductForm";
@@ -23,6 +23,7 @@ export default function Stock() {
   const [editProduct, setEditProduct] = useState<any>(null);
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
   const { hasRole, user } = useAuth();
 
@@ -40,16 +41,22 @@ export default function Stock() {
   });
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ["products", isVendeur ? user?.id : "all"],
+    queryKey: ["products", isVendeur ? user?.id : "all", showArchived],
     queryFn: async () => {
       let query = supabase
         .from("products")
         .select("*, categories(name), boutiques(name, country_id, countries(name))")
         .order("created_at", { ascending: false });
 
-      // Vendeur voit uniquement les produits en stock
       if (isVendeur) {
-        query = query.gt("stock_quantity", 0);
+        // Vendeur voit uniquement les produits en stock non archivés
+        query = query.gt("stock_quantity", 0).eq("is_archived", false);
+      } else if (showArchived) {
+        // Admin — voir les archivés
+        query = query.eq("is_archived", true);
+      } else {
+        // Admin — voir les actifs
+        query = query.eq("is_archived", false);
       }
 
       const { data, error } = await query;
@@ -76,7 +83,7 @@ export default function Stock() {
 
   const addProduct = useMutation({
     mutationFn: async (product: any) => {
-      const { error } = await supabase.from("products").insert(product);
+      const { error } = await supabase.from("products").insert({ ...product, is_archived: false });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -101,14 +108,18 @@ export default function Stock() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const deleteProduct = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
+  // Archiver un produit (au lieu de supprimer)
+  const archiveProduct = useMutation({
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
+      const { error } = await supabase
+        .from("products")
+        .update({ is_archived: archive, updated_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, { archive }) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Produit supprimé");
+      toast.success(archive ? "Produit archivé — l'historique des ventes est conservé ✅" : "Produit restauré avec succès ✅");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -127,7 +138,7 @@ export default function Stock() {
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text("Gestion du Stock — Mabelya", 14, 22);
+    doc.text(`${showArchived ? "Produits archivés" : "Gestion du Stock"} — Mabelya`, 14, 22);
     doc.setFontSize(10);
     doc.text(`${filtered?.length ?? 0} produits — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
     const rows = (filtered ?? []).map((p) => [
@@ -155,19 +166,31 @@ export default function Stock() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold">
-            {isVendeur ? "Produits disponibles" : "Gestion du stock"}
+            {isVendeur ? "Produits disponibles" : showArchived ? "Produits archivés" : "Gestion du stock"}
           </h1>
           <p className="text-muted-foreground text-sm">
             {filtered?.length ?? 0} produit{(filtered?.length ?? 0) > 1 ? "s" : ""}
             {isVendeur && " en stock"}
+            {showArchived && " archivé(s)"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <Download className="h-4 w-4 mr-2" /> PDF
           </Button>
-          {/* Bouton ajouter — uniquement pour admin */}
+          {/* Bouton basculer archivés — uniquement pour admin */}
           {canManage && (
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {showArchived ? "Voir actifs" : "Voir archivés"}
+            </Button>
+          )}
+          {/* Bouton ajouter — uniquement pour admin et si pas en mode archivés */}
+          {canManage && !showArchived && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Ajouter un produit</Button>
@@ -192,6 +215,13 @@ export default function Stock() {
       {isVendeur && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
           ℹ️ Vous voyez uniquement les produits disponibles en stock. Contactez un administrateur pour ajouter ou modifier des produits.
+        </div>
+      )}
+
+      {/* Bannière archivés */}
+      {showArchived && canManage && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-700">
+          📦 Les produits archivés sont cachés des vendeurs mais leur historique de ventes est conservé. Vous pouvez les restaurer à tout moment.
         </div>
       )}
 
@@ -247,7 +277,7 @@ export default function Stock() {
                 </TableRow>
               ) : filtered && filtered.length > 0 ? (
                 filtered.map((p) => (
-                  <TableRow key={p.id}>
+                  <TableRow key={p.id} className={(p as any).is_archived ? "opacity-60" : ""}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
@@ -289,33 +319,53 @@ export default function Stock() {
                       </TableCell>
                     )}
                     <TableCell>
-                      <Badge
-                        variant={p.stock_quantity > 0 ? "secondary" : "destructive"}
-                        className="text-xs"
-                      >
-                        {p.stock_quantity > 0 ? "En stock" : "Rupture"}
-                      </Badge>
+                      {(p as any).is_archived ? (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          Archivé
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant={p.stock_quantity > 0 ? "secondary" : "destructive"}
+                          className="text-xs"
+                        >
+                          {p.stock_quantity > 0 ? "En stock" : "Rupture"}
+                        </Badge>
+                      )}
                     </TableCell>
-                    {/* Actions — uniquement pour admin */}
                     {canManage && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          {/* Bouton modifier — uniquement si pas archivé */}
+                          {!(p as any).is_archived && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setEditProduct(p)}
+                              title="Modifier"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {/* Bouton Archiver / Restaurer */}
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setEditProduct(p)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
+                            className={(p as any).is_archived
+                              ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                              : "text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                            }
                             onClick={() => {
-                              if (confirm("Supprimer ce produit ?")) deleteProduct.mutate(p.id);
+                              const action = (p as any).is_archived ? "restaurer" : "archiver";
+                              if (confirm(`Voulez-vous ${action} "${p.name}" ?`)) {
+                                archiveProduct.mutate({ id: p.id, archive: !(p as any).is_archived });
+                              }
                             }}
+                            title={(p as any).is_archived ? "Restaurer" : "Archiver"}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {(p as any).is_archived
+                              ? <ArchiveRestore className="h-4 w-4" />
+                              : <Archive className="h-4 w-4" />
+                            }
                           </Button>
                         </div>
                       </TableCell>
@@ -325,7 +375,12 @@ export default function Stock() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={canManage ? 9 : 7} className="text-center py-8 text-muted-foreground">
-                    {isVendeur ? "Aucun produit disponible en stock" : "Aucun produit trouvé"}
+                    {isVendeur
+                      ? "Aucun produit disponible en stock"
+                      : showArchived
+                      ? "Aucun produit archivé"
+                      : "Aucun produit trouvé"
+                    }
                   </TableCell>
                 </TableRow>
               )}
