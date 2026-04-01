@@ -9,26 +9,22 @@ import { User, Shield, Camera, Phone, Mail, Lock, Eye, EyeOff } from "lucide-rea
 import { toast } from "sonner";
 
 export default function Profile() {
-  const { user, profile, roles } = useAuth();
+  const { user, profile, roles, refreshProfile } = useAuth();
 
-  // Infos de base
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState((profile as any)?.phone ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>((profile as any)?.avatar_url ?? null);
   const [saving, setSaving] = useState(false);
 
-  // Changement email — initialisé vide pour forcer la saisie
   const [newEmail, setNewEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
 
-  // Changement mot de passe
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
 
-  // Upload photo
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,51 +52,34 @@ export default function Profile() {
       .eq("user_id", user.id);
     setSaving(false);
     if (error) {
-      toast.error("Erreur lors de la mise à jour : " + error.message);
+      toast.error("Erreur : " + error.message);
     } else {
+      await refreshProfile(); // ✅ Recharge le profil dans le contexte
       toast.success("Profil mis à jour avec succès !");
     }
   };
 
   // Changement email
   const handleEmailChange = async () => {
-    if (!newEmail.trim()) {
-      toast.error("Veuillez entrer un nouvel email");
-      return;
-    }
-    if (newEmail.trim() === user?.email) {
-      toast.error("Le nouvel email doit être différent de l'email actuel");
-      return;
-    }
-    if (!newEmail.includes("@")) {
-      toast.error("Veuillez entrer un email valide");
-      return;
-    }
+    if (!newEmail.trim()) { toast.error("Veuillez entrer un nouvel email"); return; }
+    if (newEmail.trim() === user?.email) { toast.error("Ce doit être un email différent"); return; }
+    if (!newEmail.includes("@")) { toast.error("Email invalide"); return; }
     setSavingEmail(true);
     const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
     setSavingEmail(false);
     if (error) {
       toast.error("Erreur : " + error.message);
     } else {
-      toast.success("Email mis à jour ! Vérifiez votre boîte mail pour confirmer.");
+      toast.success("Email mis à jour ! Vérifiez votre boîte mail.");
       setNewEmail("");
     }
   };
 
   // Changement mot de passe
   const handlePasswordChange = async () => {
-    if (!newPassword || !confirmPassword) {
-      toast.error("Veuillez remplir tous les champs");
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast.error("Le mot de passe doit contenir au moins 6 caractères");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("Les mots de passe ne correspondent pas");
-      return;
-    }
+    if (!newPassword || !confirmPassword) { toast.error("Remplissez tous les champs"); return; }
+    if (newPassword.length < 6) { toast.error("Minimum 6 caractères"); return; }
+    if (newPassword !== confirmPassword) { toast.error("Les mots de passe ne correspondent pas"); return; }
     setSavingPwd(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPwd(false);
@@ -113,21 +92,18 @@ export default function Profile() {
     }
   };
 
-  // Upload photo de profil
+  // Upload photo
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("La photo ne doit pas dépasser 2 Mo");
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      toast.error("Veuillez sélectionner une image (JPG, PNG, etc.)");
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Max 2 Mo"); return; }
+    if (!file.type.startsWith("image/")) { toast.error("Format image requis"); return; }
 
     setUploadingPhoto(true);
+
+    // Affichage local immédiat
+    const localUrl = URL.createObjectURL(file);
+    setAvatarUrl(localUrl);
 
     const fileExt = file.name.split(".").pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
@@ -138,10 +114,8 @@ export default function Profile() {
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      const localUrl = URL.createObjectURL(file);
-      setAvatarUrl(localUrl);
       setUploadingPhoto(false);
-      toast.error("Erreur upload storage — photo affichée localement");
+      toast.error("Erreur upload — vérifiez que le bucket 'avatars' existe dans Supabase Storage");
       return;
     }
 
@@ -156,10 +130,11 @@ export default function Profile() {
     setUploadingPhoto(false);
 
     if (updateError) {
-      toast.error("Erreur lors de la sauvegarde de la photo");
+      toast.error("Erreur sauvegarde photo");
     } else {
       setAvatarUrl(publicUrl);
-      toast.success("Photo de profil mise à jour !");
+      await refreshProfile(); // ✅ Recharge le profil
+      toast.success("Photo mise à jour !");
     }
   };
 
@@ -170,20 +145,14 @@ export default function Profile() {
         <p className="text-sm text-muted-foreground">Gérer vos informations personnelles</p>
       </div>
 
-      {/* Card infos de base */}
+      {/* Infos de base */}
       <Card className="rounded-2xl">
         <CardHeader>
           <div className="flex items-center gap-4">
-            {/* Photo de profil */}
             <div className="relative">
               <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
                 {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Photo de profil"
-                    className="h-full w-full object-cover"
-                    onError={() => setAvatarUrl(null)}
-                  />
+                  <img src={avatarUrl} alt="Photo" className="h-full w-full object-cover" onError={() => setAvatarUrl(null)} />
                 ) : (
                   <User className="h-10 w-10 text-primary" />
                 )}
@@ -192,24 +161,16 @@ export default function Profile() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPhoto}
-                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-white flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors"
+                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-white flex items-center justify-center shadow-md hover:bg-primary/90"
               >
                 <Camera className="h-3.5 w-3.5" />
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
             </div>
             <div>
-              <CardTitle className="text-lg">{profile?.full_name || "Utilisateur"}</CardTitle>
+              <p className="font-semibold text-lg">{profile?.full_name || "Utilisateur"}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
-              {uploadingPhoto && (
-                <p className="text-xs text-primary mt-1">Upload en cours...</p>
-              )}
+              {uploadingPhoto && <p className="text-xs text-primary mt-1">Upload en cours...</p>}
             </div>
           </div>
         </CardHeader>
@@ -242,9 +203,7 @@ export default function Profile() {
           {/* Téléphone */}
           <div>
             <label className="text-sm font-medium mb-2 block">
-              <span className="flex items-center gap-1">
-                <Phone className="h-3.5 w-3.5" /> Numéro de téléphone
-              </span>
+              <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Numéro de téléphone</span>
             </label>
             <Input
               value={phone}
@@ -261,26 +220,18 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      {/* Card changement email */}
+      {/* Changer email */}
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Mail className="h-4 w-4 text-primary" />
-            Changer l'adresse email
+            <Mail className="h-4 w-4 text-primary" /> Changer l'adresse email
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Email actuel en lecture seule */}
           <div>
             <label className="text-sm font-medium mb-2 block">Email actuel</label>
-            <Input
-              value={user?.email ?? ""}
-              disabled
-              className="rounded-xl bg-muted text-muted-foreground"
-            />
+            <Input value={user?.email ?? ""} disabled className="rounded-xl bg-muted text-muted-foreground" />
           </div>
-
-          {/* Nouvel email — champ vide par défaut */}
           <div>
             <label className="text-sm font-medium mb-2 block">Nouvel email</label>
             <Input
@@ -292,46 +243,32 @@ export default function Profile() {
               autoComplete="off"
             />
             {newEmail && newEmail === user?.email && (
-              <p className="text-xs text-red-500 mt-1">
-                ✗ Ce doit être un email différent de l'actuel
-              </p>
+              <p className="text-xs text-red-500 mt-1">✗ Doit être différent de l'email actuel</p>
             )}
             {newEmail && newEmail !== user?.email && newEmail.includes("@") && (
-              <p className="text-xs text-green-600 mt-1">
-                ✓ Nouvel email valide
-              </p>
+              <p className="text-xs text-green-600 mt-1">✓ Email valide</p>
             )}
           </div>
-
           <Button
             onClick={handleEmailChange}
-            disabled={
-              savingEmail ||
-              !newEmail.trim() ||
-              newEmail.trim() === user?.email ||
-              !newEmail.includes("@")
-            }
+            disabled={savingEmail || !newEmail.trim() || newEmail.trim() === user?.email || !newEmail.includes("@")}
             variant="outline"
             className="rounded-xl w-full"
           >
             {savingEmail ? "Mise à jour..." : "Changer l'email"}
           </Button>
-          <p className="text-xs text-muted-foreground">
-            ℹ️ Un email de confirmation sera envoyé à la nouvelle adresse.
-          </p>
+          <p className="text-xs text-muted-foreground">ℹ️ Un email de confirmation sera envoyé.</p>
         </CardContent>
       </Card>
 
-      {/* Card changement mot de passe */}
+      {/* Changer mot de passe */}
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Lock className="h-4 w-4 text-primary" />
-            Changer le mot de passe
+            <Lock className="h-4 w-4 text-primary" /> Changer le mot de passe
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Nouveau mot de passe */}
           <div>
             <label className="text-sm font-medium mb-2 block">Nouveau mot de passe</label>
             <div className="relative">
@@ -342,17 +279,11 @@ export default function Profile() {
                 placeholder="Minimum 6 caractères"
                 type={showNewPwd ? "text" : "password"}
               />
-              <button
-                type="button"
-                onClick={() => setShowNewPwd(!showNewPwd)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
+              <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {showNewPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
-
-          {/* Confirmer mot de passe */}
           <div>
             <label className="text-sm font-medium mb-2 block">Confirmer le mot de passe</label>
             <div className="relative">
@@ -363,19 +294,13 @@ export default function Profile() {
                 placeholder="Répétez le mot de passe"
                 type={showConfirmPwd ? "text" : "password"}
               />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPwd(!showConfirmPwd)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
+              <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {showConfirmPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {confirmPassword && (
               <p className={`text-xs mt-1 ${newPassword === confirmPassword ? "text-green-600" : "text-red-500"}`}>
-                {newPassword === confirmPassword
-                  ? "✓ Les mots de passe correspondent"
-                  : "✗ Les mots de passe ne correspondent pas"}
+                {newPassword === confirmPassword ? "✓ Les mots de passe correspondent" : "✗ Ne correspondent pas"}
               </p>
             )}
           </div>
@@ -383,20 +308,14 @@ export default function Profile() {
           {/* Indicateur force */}
           {newPassword && (
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Force du mot de passe :</p>
+              <p className="text-xs text-muted-foreground">Force :</p>
               <div className="flex gap-1">
                 {[1, 2, 3, 4].map((level) => (
-                  <div
-                    key={level}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
-                      newPassword.length >= level * 3
-                        ? level <= 1 ? "bg-red-400"
-                          : level <= 2 ? "bg-orange-400"
-                          : level <= 3 ? "bg-yellow-400"
-                          : "bg-green-500"
-                        : "bg-muted"
-                    }`}
-                  />
+                  <div key={level} className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    newPassword.length >= level * 3
+                      ? level <= 1 ? "bg-red-400" : level <= 2 ? "bg-orange-400" : level <= 3 ? "bg-yellow-400" : "bg-green-500"
+                      : "bg-muted"
+                  }`} />
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -407,13 +326,7 @@ export default function Profile() {
 
           <Button
             onClick={handlePasswordChange}
-            disabled={
-              savingPwd ||
-              !newPassword ||
-              !confirmPassword ||
-              newPassword !== confirmPassword ||
-              newPassword.length < 6
-            }
+            disabled={savingPwd || !newPassword || !confirmPassword || newPassword !== confirmPassword || newPassword.length < 6}
             variant="outline"
             className="rounded-xl w-full"
           >

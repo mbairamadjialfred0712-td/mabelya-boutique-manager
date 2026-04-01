@@ -5,14 +5,21 @@ import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
+interface Profile {
+  full_name: string;
+  avatar_url: string | null;
+  phone: string | null;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   roles: AppRole[];
-  profile: { full_name: string; avatar_url: string | null } | null;
+  profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -27,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
-  const [profile, setProfile] = useState<{ full_name: string; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => {
           fetchUserData(session.user.id);
         }, 0);
-        // Log login activity
         if (event === "SIGNED_IN") {
           supabase.from("activity_logs").insert({
             user_id: session.user.id,
@@ -69,12 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchUserData(userId: string) {
     const [rolesRes, profileRes] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("profiles").select("full_name, avatar_url").eq("user_id", userId).single(),
+      supabase.from("profiles")
+        .select("full_name, avatar_url, phone")
+        .eq("user_id", userId)
+        .single(),
     ]);
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
     setLoading(false);
   }
+
+  // Fonction pour recharger le profil après modification
+  const refreshProfile = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("full_name, avatar_url, phone")
+      .eq("user_id", user.id)
+      .single();
+    if (data) setProfile(data);
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -83,7 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasRole = (role: AppRole) => roles.includes(role);
 
   return (
-    <AuthContext.Provider value={{ session, user, roles, profile, loading, signOut, hasRole }}>
+    <AuthContext.Provider value={{
+      session, user, roles, profile, loading,
+      signOut, hasRole, refreshProfile
+    }}>
       {children}
     </AuthContext.Provider>
   );
