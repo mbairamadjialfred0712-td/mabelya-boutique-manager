@@ -1,44 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Mabelya Fashion Manager</title>
 
     <!-- Favicon -->
     <link rel="icon" href="/favicon.jpg" type="image/jpeg">
 
-    <!-- PWA -->
+    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- 🔥 iPhone PWA (IMPORTANT) -->
+    <!-- ✅ iOS / iPad PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Mabelya" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
 
-    <!-- 🔥 Splash screen -->
-    <link rel="apple-touch-startup-image" href="/splash-512.png" />
+    <!-- ✅ Android PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#c83250" />
+    <meta name="application-name" content="Mabelya" />
+
+    <!-- ✅ Splash screens iPad -->
+    <link rel="apple-touch-startup-image"
+      href="/icon-512.png"
+      media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)" />
+    <link rel="apple-touch-startup-image"
+      href="/icon-512.png"
+      media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" />
 
     <!-- SEO -->
     <meta name="description" content="Gestion de Boutique de Mabelya Fashion">
     <meta name="author" content="Mabelya Fashion" />
+    <meta name="keywords" content="mabelya, boutique, fashion, gestion, stock, ventes" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="Mabelya Fashion Manager">
     <meta property="og:description" content="Gestion de Boutique de Mabelya Fashion">
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/icon-512.png">
+    <meta property="og:image" content="/icon-512.png" />
 
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Mabelya Fashion Manager">
-    <meta name="twitter:description" content="Gestion de Boutique de Mabelya Fashion">
-    <meta name="twitter:image" content="/icon-512.png">
-
+    <!-- ✅ Windows tiles -->
+    <meta name="msapplication-TileColor" content="#c83250" />
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
