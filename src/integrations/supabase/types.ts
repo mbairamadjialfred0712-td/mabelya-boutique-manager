@@ -192,6 +192,7 @@ export type Database = {
           boutique_id: string | null
           country_id: string | null
           created_at: string
+          created_by: string | null
           email: string | null
           full_name: string
           gender: string | null
@@ -208,6 +209,7 @@ export type Database = {
           boutique_id?: string | null
           country_id?: string | null
           created_at?: string
+          created_by?: string | null
           email?: string | null
           full_name: string
           gender?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           boutique_id?: string | null
           country_id?: string | null
           created_at?: string
+          created_by?: string | null
           email?: string | null
           full_name?: string
           gender?: string | null
@@ -325,6 +328,8 @@ export type Database = {
           created_at: string
           id: string
           image_url: string | null
+          is_active: boolean | null
+          is_archived: boolean | null
           name: string
           purchase_price: number
           selling_price: number
@@ -339,6 +344,8 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          is_active?: boolean | null
+          is_archived?: boolean | null
           name: string
           purchase_price?: number
           selling_price?: number
@@ -353,6 +360,8 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          is_active?: boolean | null
+          is_archived?: boolean | null
           name?: string
           purchase_price?: number
           selling_price?: number
@@ -383,6 +392,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          phone: string | null
           updated_at: string
           user_id: string
         }
@@ -391,6 +401,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          phone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -399,6 +410,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          phone?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -441,6 +453,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_showcase"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sale_items_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
@@ -458,6 +477,7 @@ export type Database = {
           id: string
           invoice_number: string
           payment_method: string
+          status: string | null
           total_amount: number
           user_id: string
         }
@@ -469,6 +489,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           payment_method: string
+          status?: string | null
           total_amount?: number
           user_id: string
         }
@@ -480,6 +501,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           payment_method?: string
+          status?: string | null
           total_amount?: number
           user_id?: string
         }
@@ -503,6 +525,7 @@ export type Database = {
       staff: {
         Row: {
           boutique_id: string
+          country_id: string | null
           created_at: string
           full_name: string
           hire_date: string
@@ -512,9 +535,11 @@ export type Database = {
           role: string
           salary: number
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           boutique_id: string
+          country_id?: string | null
           created_at?: string
           full_name: string
           hire_date?: string
@@ -524,9 +549,11 @@ export type Database = {
           role?: string
           salary?: number
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           boutique_id?: string
+          country_id?: string | null
           created_at?: string
           full_name?: string
           hire_date?: string
@@ -536,10 +563,59 @@ export type Database = {
           role?: string
           salary?: number
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "staff_boutique_id_fkey"
+            columns: ["boutique_id"]
+            isOneToOne: false
+            referencedRelation: "boutiques"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "countries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_expenses: {
+        Row: {
+          amount: number
+          boutique_id: string | null
+          category: string
+          created_at: string | null
+          description: string
+          expense_date: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          boutique_id?: string | null
+          category?: string
+          created_at?: string | null
+          description: string
+          expense_date?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          boutique_id?: string | null
+          category?: string
+          created_at?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_expenses_boutique_id_fkey"
             columns: ["boutique_id"]
             isOneToOne: false
             referencedRelation: "boutiques"
@@ -567,9 +643,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_showcase: {
+        Row: {
+          color: string | null
+          id: string | null
+          image_url: string | null
+          name: string | null
+          selling_price: number | null
+          size: string | null
+          stock_quantity: number | null
+        }
+        Insert: {
+          color?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          selling_price?: number | null
+          size?: string | null
+          stock_quantity?: number | null
+        }
+        Update: {
+          color?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          selling_price?: number | null
+          size?: string | null
+          stock_quantity?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      decrement_stock: {
+        Args: { product_id: string; qty: number }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

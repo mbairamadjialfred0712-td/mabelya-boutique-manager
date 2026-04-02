@@ -51,7 +51,7 @@ export default function Reports() {
     queryFn: async () => {
       let query = supabase
         .from("sales")
-        .select("total_amount, created_at, user_id, boutique_id, boutiques(name, country_id, countries(name))")
+        .select("id, total_amount, created_at, user_id, boutique_id, boutiques(name, country_id, countries(name))")
         .gte("created_at", dateFrom)
         .lte("created_at", dateTo + "T23:59:59");
 

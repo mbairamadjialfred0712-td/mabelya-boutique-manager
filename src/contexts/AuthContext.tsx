@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("profiles")
         .select("full_name, avatar_url, phone")
         .eq("user_id", userId)
-        .single(),
+        .single() as any as Promise<{ data: Profile | null; error: any }>,
     ]);
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
@@ -88,11 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fonction pour recharger le profil après modification
   const refreshProfile = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data } = await (supabase
       .from("profiles")
       .select("full_name, avatar_url, phone")
       .eq("user_id", user.id)
-      .single();
+      .single() as any as Promise<{ data: Profile | null; error: any }>);
     if (data) setProfile(data);
   };
 
