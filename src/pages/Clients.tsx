@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Users, Download, Phone, Mail, Trash2 } from "lucide-react";
+import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
