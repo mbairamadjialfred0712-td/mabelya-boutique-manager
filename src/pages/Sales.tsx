@@ -211,14 +211,28 @@ export default function Sales() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold">
-            {isVendeur ? "Mes ventes" : "Ventes"}
+            {showArchived ? "Ventes archivées" : isVendeur ? "Mes ventes" : "Ventes"}
           </h1>
-          <p className="text-muted-foreground text-sm">{totalVentes} vente{totalVentes > 1 ? "s" : ""}</p>
+          <p className="text-muted-foreground text-sm">
+            {totalVentes} vente{totalVentes > 1 ? "s" : ""}{showArchived ? " archivée(s)" : ""}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <Download className="h-4 w-4 mr-2" /> PDF
           </Button>
+          {(isSuperAdmin || isAdminBoutique) && (
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+              className={showArchived ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {showArchived ? "Voir actives" : "Voir archivées"}
+            </Button>
+          )}
+          {!showArchived && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
