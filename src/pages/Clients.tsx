@@ -103,6 +103,7 @@ export default function Clients() {
         gender: client.gender,
         status: client.status,
         notes: client.notes || null,
+        created_by: user?.id ?? null,
       });
       if (error) throw error;
     },
@@ -114,6 +115,18 @@ export default function Clients() {
         age_range: "Non spécifié", gender: "Non spécifié", status: "Actif", notes: "",
       });
       toast.success("Client ajouté avec succès");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteClient = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("clients").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client supprimé");
     },
     onError: (err: any) => toast.error(err.message),
   });

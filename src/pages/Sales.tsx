@@ -306,6 +306,42 @@ export default function Sales() {
                     <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                       {new Date(s.created_at).toLocaleDateString("fr-FR")}
                     </TableCell>
+                    {(isSuperAdmin || isAdminBoutique) && (
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => archiveSale.mutate({ id: s.id, archive: s.status !== "archived" })}
+                            title={s.status === "archived" ? "Restaurer" : "Archiver"}
+                          >
+                            {s.status === "archived" ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer cette vente ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    La vente {s.invoice_number} sera définitivement supprimée. Cette action est irréversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteSale.mutate(s.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
