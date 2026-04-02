@@ -341,7 +341,7 @@ export default function Clients() {
                 <TableHead className="hidden lg:table-cell">Âge</TableHead>
                 <TableHead className="text-right">Dépenses</TableHead>
                 <TableHead>Statut</TableHead>
-              </TableRow>
+                {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
             </TableHeader>
             <TableBody>
               {isLoading ? (
