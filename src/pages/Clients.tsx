@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Users, Download, Phone, Mail, Trash2 } from "lucide-react";
+import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
@@ -27,6 +27,7 @@ export default function Clients() {
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterGender, setFilterGender] = useState<string>("all");
   const [filterAge, setFilterAge] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
   const { hasRole, user } = useAuth();
 
@@ -131,6 +132,18 @@ export default function Clients() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const archiveClient = useMutation({
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
+      const { error } = await supabase.from("clients").update({ is_archived: archive } as any).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client mis à jour");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const filtered = clients?.filter((c) => {
     const matchSearch =
       c.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -138,7 +151,8 @@ export default function Clients() {
     const matchCountry = filterCountry === "all" || c.country_id === filterCountry;
     const matchGender = filterGender === "all" || c.gender === filterGender;
     const matchAge = filterAge === "all" || c.age_range === filterAge;
-    return matchSearch && matchCountry && matchGender && matchAge;
+    const matchArchived = showArchived ? (c as any).is_archived === true : (c as any).is_archived !== true;
+    return matchSearch && matchCountry && matchGender && matchAge && matchArchived;
   });
 
   const totalClients = filtered?.length ?? 0;
@@ -171,17 +185,29 @@ export default function Clients() {
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Users className="h-6 w-6" />
-            {isVendeur ? "Mes clients" : "Clients"}
+            {showArchived ? "Clients archivés" : isVendeur ? "Mes clients" : "Clients"}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {totalClients} client{totalClients > 1 ? "s" : ""}
-            {isVendeur && staffData && ` — ${(staffData.boutiques as any)?.name ?? "ma boutique"}`}
+            {totalClients} client{totalClients > 1 ? "s" : ""}{showArchived ? " archivé(s)" : ""}
+            {!showArchived && isVendeur && staffData && ` — ${(staffData.boutiques as any)?.name ?? "ma boutique"}`}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportPDF} size="sm">
             <Download className="h-4 w-4 mr-2" /> PDF
           </Button>
+          {(isSuperAdmin || isAdminBoutique) && (
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+              className={showArchived ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {showArchived ? "Voir actifs" : "Voir archivés"}
+            </Button>
+          )}
+          {!showArchived && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Nouveau client</Button>
@@ -266,11 +292,19 @@ export default function Clients() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
+      {/* Info banner for archived view */}
+      {showArchived && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+          📦 Les clients archivés sont conservés pour l'historique. Vous pouvez les restaurer à tout moment.
+        </div>
+      )}
+
       {/* Message info vendeur */}
-      {isVendeur && (
+      {!showArchived && isVendeur && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
           ℹ️ Vous voyez uniquement les clients de votre boutique.
         </div>
@@ -341,7 +375,7 @@ export default function Clients() {
                 <TableHead className="hidden lg:table-cell">Âge</TableHead>
                 <TableHead className="text-right">Dépenses</TableHead>
                 <TableHead>Statut</TableHead>
-                {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
+                {(isSuperAdmin || isAdminBoutique) && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -385,29 +419,40 @@ export default function Clients() {
                         {c.status}
                       </Badge>
                     </TableCell>
-                    {isSuperAdmin && (
+                    {(isSuperAdmin || isAdminBoutique) && (
                       <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Le client « {c.full_name} » sera définitivement supprimé. Cette action est irréversible.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteClient.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Supprimer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => archiveClient.mutate({ id: c.id, archive: !(c as any).is_archived })}
+                            title={(c as any).is_archived ? "Restaurer" : "Archiver"}
+                          >
+                            {(c as any).is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Le client « {c.full_name} » sera définitivement supprimé. Cette action est irréversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteClient.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>

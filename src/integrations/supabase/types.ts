@@ -197,6 +197,7 @@ export type Database = {
           full_name: string
           gender: string | null
           id: string
+          is_archived: boolean
           notes: string | null
           phone: string | null
           status: string | null
@@ -214,6 +215,7 @@ export type Database = {
           full_name: string
           gender?: string | null
           id?: string
+          is_archived?: boolean
           notes?: string | null
           phone?: string | null
           status?: string | null
@@ -231,6 +233,7 @@ export type Database = {
           full_name?: string
           gender?: string | null
           id?: string
+          is_archived?: boolean
           notes?: string | null
           phone?: string | null
           status?: string | null
