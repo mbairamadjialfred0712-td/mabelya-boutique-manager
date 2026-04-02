@@ -185,17 +185,29 @@ export default function Clients() {
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Users className="h-6 w-6" />
-            {isVendeur ? "Mes clients" : "Clients"}
+            {showArchived ? "Clients archivés" : isVendeur ? "Mes clients" : "Clients"}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {totalClients} client{totalClients > 1 ? "s" : ""}
-            {isVendeur && staffData && ` — ${(staffData.boutiques as any)?.name ?? "ma boutique"}`}
+            {totalClients} client{totalClients > 1 ? "s" : ""}{showArchived ? " archivé(s)" : ""}
+            {!showArchived && isVendeur && staffData && ` — ${(staffData.boutiques as any)?.name ?? "ma boutique"}`}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportPDF} size="sm">
             <Download className="h-4 w-4 mr-2" /> PDF
           </Button>
+          {(isSuperAdmin || isAdminBoutique) && (
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+              className={showArchived ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {showArchived ? "Voir actifs" : "Voir archivés"}
+            </Button>
+          )}
+          {!showArchived && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Nouveau client</Button>
