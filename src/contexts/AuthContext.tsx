@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("profiles")
         .select("full_name, avatar_url, phone")
         .eq("user_id", userId)
-        .single(),
+        .single() as Promise<{ data: Profile | null; error: any }>,
     ]);
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
