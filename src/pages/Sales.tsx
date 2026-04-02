@@ -251,8 +251,16 @@ export default function Sales() {
               />
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
+
+      {/* Info banner for archived view */}
+      {showArchived && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+          📦 Les ventes archivées sont conservées pour l'historique. Vous pouvez les restaurer à tout moment.
+        </div>
+      )}
 
       {/* Stats rapides pour vendeur */}
       {isVendeur && (
