@@ -88,11 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fonction pour recharger le profil après modification
   const refreshProfile = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data } = await (supabase
       .from("profiles")
       .select("full_name, avatar_url, phone")
       .eq("user_id", user.id)
-      .single();
+      .single() as Promise<{ data: Profile | null; error: any }>);
     if (data) setProfile(data);
   };
 

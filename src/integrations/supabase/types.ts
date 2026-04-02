@@ -453,6 +453,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_showcase"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sale_items_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
@@ -636,7 +643,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_showcase: {
+        Row: {
+          color: string | null
+          id: string | null
+          image_url: string | null
+          name: string | null
+          selling_price: number | null
+          size: string | null
+          stock_quantity: number | null
+        }
+        Insert: {
+          color?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          selling_price?: number | null
+          size?: string | null
+          stock_quantity?: number | null
+        }
+        Update: {
+          color?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          selling_price?: number | null
+          size?: string | null
+          stock_quantity?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       decrement_stock: {
