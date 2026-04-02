@@ -28,6 +28,7 @@ export default function Sales() {
   const [open, setOpen] = useState(false);
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
   const { user, hasRole } = useAuth();
 
