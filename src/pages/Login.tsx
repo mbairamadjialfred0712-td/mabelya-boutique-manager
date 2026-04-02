@@ -33,11 +33,10 @@ export default function Login() {
     supabase
       .from("products_showcase" as any)
       .select("id, name, selling_price, stock_quantity, image_url, color, size")
-      .gt("stock_quantity", 0)
-      .order("created_at", { ascending: false })
+      .order("selling_price", { ascending: false })
       .limit(12)
-      .then(({ data }) => {
-        if (data) setProducts(data);
+      .then(({ data }: any) => {
+        if (data) setProducts(data as PublicProduct[]);
       });
   }, []);
 
