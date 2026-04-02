@@ -31,7 +31,7 @@ export default function Login() {
 
   useEffect(() => {
     supabase
-      .from("products")
+      .from("products_showcase" as any)
       .select("id, name, selling_price, stock_quantity, image_url, color, size")
       .gt("stock_quantity", 0)
       .order("created_at", { ascending: false })
