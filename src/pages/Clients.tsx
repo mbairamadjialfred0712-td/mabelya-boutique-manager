@@ -342,6 +342,7 @@ export default function Clients() {
                 <TableHead className="text-right">Dépenses</TableHead>
                 <TableHead>Statut</TableHead>
                 {isSuperAdmin && <TableHead className="text-right">Actions</TableHead>}
+              </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
