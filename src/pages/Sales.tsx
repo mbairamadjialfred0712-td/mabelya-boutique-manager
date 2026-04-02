@@ -140,6 +140,32 @@ export default function Sales() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const archiveSale = useMutation({
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
+      const { error } = await supabase.from("sales").update({ status: archive ? "archived" : "pending" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Vente mise à jour");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteSale = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: itemsErr } = await supabase.from("sale_items").delete().eq("sale_id", id);
+      if (itemsErr) throw itemsErr;
+      const { error } = await supabase.from("sales").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Vente supprimée");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const filteredBoutiques = boutiques?.filter(
     (b) => filterCountry === "all" || (b as any).country_id === filterCountry
   );
