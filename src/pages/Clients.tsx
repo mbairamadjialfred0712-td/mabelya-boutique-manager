@@ -27,6 +27,7 @@ export default function Clients() {
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [filterGender, setFilterGender] = useState<string>("all");
   const [filterAge, setFilterAge] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
   const { hasRole, user } = useAuth();
 
