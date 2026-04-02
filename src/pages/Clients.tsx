@@ -292,11 +292,19 @@ export default function Clients() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
+      {/* Info banner for archived view */}
+      {showArchived && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+          📦 Les clients archivés sont conservés pour l'historique. Vous pouvez les restaurer à tout moment.
+        </div>
+      )}
+
       {/* Message info vendeur */}
-      {isVendeur && (
+      {!showArchived && isVendeur && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
           ℹ️ Vous voyez uniquement les clients de votre boutique.
         </div>
