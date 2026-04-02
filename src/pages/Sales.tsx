@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, ShoppingCart, Trash2, Download } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Plus, ShoppingCart, Trash2, Download, Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
@@ -139,6 +140,32 @@ export default function Sales() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const archiveSale = useMutation({
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
+      const { error } = await supabase.from("sales").update({ status: archive ? "archived" : "pending" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Vente mise à jour");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteSale = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: itemsErr } = await supabase.from("sale_items").delete().eq("sale_id", id);
+      if (itemsErr) throw itemsErr;
+      const { error } = await supabase.from("sales").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Vente supprimée");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const filteredBoutiques = boutiques?.filter(
     (b) => filterCountry === "all" || (b as any).country_id === filterCountry
   );
@@ -257,6 +284,7 @@ export default function Sales() {
                 <TableHead>Paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
                 <TableHead className="hidden lg:table-cell">Date</TableHead>
+                {(isSuperAdmin || isAdminBoutique) && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,6 +306,42 @@ export default function Sales() {
                     <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                       {new Date(s.created_at).toLocaleDateString("fr-FR")}
                     </TableCell>
+                    {(isSuperAdmin || isAdminBoutique) && (
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => archiveSale.mutate({ id: s.id, archive: s.status !== "archived" })}
+                            title={s.status === "archived" ? "Restaurer" : "Archiver"}
+                          >
+                            {s.status === "archived" ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer cette vente ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    La vente {s.invoice_number} sera définitivement supprimée. Cette action est irréversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteSale.mutate(s.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
