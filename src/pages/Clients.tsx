@@ -132,6 +132,18 @@ export default function Clients() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const archiveClient = useMutation({
+    mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
+      const { error } = await supabase.from("clients").update({ is_archived: archive } as any).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client mis à jour");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const filtered = clients?.filter((c) => {
     const matchSearch =
       c.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -139,7 +151,8 @@ export default function Clients() {
     const matchCountry = filterCountry === "all" || c.country_id === filterCountry;
     const matchGender = filterGender === "all" || c.gender === filterGender;
     const matchAge = filterAge === "all" || c.age_range === filterAge;
-    return matchSearch && matchCountry && matchGender && matchAge;
+    const matchArchived = showArchived ? (c as any).is_archived === true : (c as any).is_archived !== true;
+    return matchSearch && matchCountry && matchGender && matchAge && matchArchived;
   });
 
   const totalClients = filtered?.length ?? 0;
