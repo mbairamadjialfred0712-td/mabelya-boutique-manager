@@ -174,7 +174,8 @@ export default function Sales() {
   const filtered = sales?.filter((s) => {
     const matchCountry = filterCountry === "all" || (s.boutiques as any)?.country_id === filterCountry;
     const matchBoutique = filterBoutique === "all" || s.boutique_id === filterBoutique;
-    return matchCountry && matchBoutique;
+    const matchArchived = showArchived ? s.status === "archived" : s.status !== "archived";
+    return matchCountry && matchBoutique && matchArchived;
   });
 
   // Stats vendeur
