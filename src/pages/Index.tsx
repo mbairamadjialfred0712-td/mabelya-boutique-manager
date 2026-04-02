@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Receipt, UserCheck, Megaphone, Globe, ShoppingCart, Clock, TrendingUp } from "lucide-react";
+import { Receipt, UserCheck, Megaphone, Globe, ShoppingCart, Clock, TrendingUp, Package, AlertTriangle } from "lucide-react";
 import { CountryFilter } from "@/components/dashboard/CountryFilter";
 import { FeatureCards } from "@/components/dashboard/FeatureCards";
 import { StatCards } from "@/components/dashboard/StatCards";
@@ -29,9 +29,14 @@ const featureCards = [
 ];
 
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, user, hasRole } = useAuth();
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
+  const isSuperAdmin = hasRole("super_admin");
+  const isAdminBoutique = hasRole("admin_boutique");
+  const isVendeur = !isSuperAdmin && !isAdminBoutique;
+
+  // Données admin
   const { data: countries } = useCountries();
   const { data: salesToday } = useSalesToday(selectedCountry);
   const { data: salesMonth } = useSalesMonth(selectedCountry);
@@ -40,30 +45,187 @@ export default function Dashboard() {
   const { data: topProducts } = useTopProducts();
   const { data: revenueByCountry } = useRevenueByCountry();
 
+  // Ventes récentes admin
   const { data: recentSales } = useQuery({
-    queryKey: ["recent-sales-dashboard"],
+    queryKey: ["recent-sales-dashboard", isVendeur ? user?.id : "all"],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("sales")
         .select("id, invoice_number, total_amount, payment_method, customer_name, created_at, boutiques(name)")
         .order("created_at", { ascending: false })
         .limit(8);
+
+      // Vendeur voit uniquement ses propres ventes
+      if (isVendeur && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data } = await query;
       return data ?? [];
     },
   });
 
-  const { data: todaySalesCount } = useQuery({
-    queryKey: ["today-sales-count"],
+  // Stats vendeur personnelles
+  const { data: vendeurStats } = useQuery({
+    queryKey: ["vendeur-stats", user?.id],
+    enabled: isVendeur && !!user?.id,
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
-      const { count } = await supabase
-        .from("sales")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", today);
+      const firstDayMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+
+      const [todayRes, monthRes, clientsRes] = await Promise.all([
+        supabase.from("sales").select("total_amount").eq("user_id", user!.id).gte("created_at", today),
+        supabase.from("sales").select("total_amount").eq("user_id", user!.id).gte("created_at", firstDayMonth),
+        supabase.from("clients").select("id", { count: "exact", head: true }).eq("created_by", user!.id),
+      ]);
+
+      const todayTotal = todayRes.data?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
+      const monthTotal = monthRes.data?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
+      const todayCount = todayRes.data?.length ?? 0;
+      const monthCount = monthRes.data?.length ?? 0;
+      const clientsCount = clientsRes.count ?? 0;
+
+      return { todayTotal, monthTotal, todayCount, monthCount, clientsCount };
+    },
+  });
+
+  const { data: todaySalesCount } = useQuery({
+    queryKey: ["today-sales-count", isVendeur ? user?.id : "all"],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      let query = supabase.from("sales").select("id", { count: "exact", head: true }).gte("created_at", today);
+      if (isVendeur && user?.id) query = query.eq("user_id", user.id);
+      const { count } = await query;
       return count ?? 0;
     },
   });
 
+  // =====================
+  // DASHBOARD VENDEUR
+  // =====================
+  if (isVendeur) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">
+            Bonjour {profile?.full_name || "Vendeur"} 👋
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">Voici votre activité personnelle aujourd'hui.</p>
+        </div>
+
+        {/* Stats personnelles vendeur */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mes ventes aujourd'hui</p>
+              <p className="text-2xl font-display font-bold">{vendeurStats?.todayCount ?? 0}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mon CA aujourd'hui</p>
+              <p className="text-2xl font-display font-bold text-primary">{formatCurrency(vendeurStats?.todayTotal ?? 0)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mon CA ce mois</p>
+              <p className="text-2xl font-display font-bold text-primary">{formatCurrency(vendeurStats?.monthTotal ?? 0)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mes clients</p>
+              <p className="text-2xl font-display font-bold">{vendeurStats?.clientsCount ?? 0}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Raccourcis vendeur */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <button
+            onClick={() => window.location.href = "/sales"}
+            className="bg-[hsl(350,70%,55%)] text-white rounded-2xl p-5 text-left transition-transform hover:scale-[1.02] shadow-lg"
+          >
+            <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center mb-4">
+              <ShoppingCart className="h-5 w-5" />
+            </div>
+            <h3 className="font-display font-bold text-base">Nouvelle vente</h3>
+            <p className="text-white/70 text-xs mt-1">Enregistrer une vente</p>
+          </button>
+          <button
+            onClick={() => window.location.href = "/clients"}
+            className="bg-[hsl(230,75%,55%)] text-white rounded-2xl p-5 text-left transition-transform hover:scale-[1.02] shadow-lg"
+          >
+            <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center mb-4">
+              <UserCheck className="h-5 w-5" />
+            </div>
+            <h3 className="font-display font-bold text-base">Mes clients</h3>
+            <p className="text-white/70 text-xs mt-1">Gérer votre clientèle</p>
+          </button>
+          <button
+            onClick={() => window.location.href = "/my-expenses"}
+            className="bg-[hsl(220,25%,12%)] text-white rounded-2xl p-5 text-left transition-transform hover:scale-[1.02] shadow-lg"
+          >
+            <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center mb-4">
+              <Receipt className="h-5 w-5" />
+            </div>
+            <h3 className="font-display font-bold text-base">Mes dépenses</h3>
+            <p className="text-white/70 text-xs mt-1">Déplacement, Wifi, etc.</p>
+          </button>
+        </div>
+
+        {/* Dernières ventes du vendeur */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-display flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" /> Mes dernières ventes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Facture</TableHead>
+                  <TableHead className="hidden md:table-cell">Client</TableHead>
+                  <TableHead className="hidden md:table-cell">Boutique</TableHead>
+                  <TableHead>Paiement</TableHead>
+                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="hidden lg:table-cell">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentSales && recentSales.length > 0 ? (
+                  recentSales.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="text-sm font-mono">{s.invoice_number}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                        {new Date(s.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Vous n'avez pas encore de ventes aujourd'hui</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // =====================
+  // DASHBOARD ADMIN / SUPER ADMIN
+  // =====================
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -77,10 +239,13 @@ export default function Dashboard() {
       </div>
 
       <FeatureCards cards={featureCards} />
+      <StatCards
+        salesToday={salesToday ?? 0}
+        salesMonth={salesMonth ?? 0}
+        totalProducts={totalProducts ?? 0}
+        lowStockCount={lowStockCount ?? 0}
+      />
 
-      <StatCards salesToday={salesToday ?? 0} salesMonth={salesMonth ?? 0} totalProducts={totalProducts ?? 0} lowStockCount={lowStockCount ?? 0} />
-
-      {/* Sales summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-4 pb-3 flex items-center gap-3">
@@ -122,7 +287,6 @@ export default function Dashboard() {
         <RevenueByCountryChart data={revenueByCountry ?? []} />
       </div>
 
-      {/* Recent Sales */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-display flex items-center gap-2">
@@ -148,7 +312,11 @@ export default function Dashboard() {
                     <TableCell className="text-sm font-mono">{s.invoice_number}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{s.customer_name ?? "—"}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm">{(s.boutiques as any)?.name ?? "—"}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{s.payment_method}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right font-medium text-sm">{formatCurrency(Number(s.total_amount))}</TableCell>
                     <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                       {new Date(s.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
