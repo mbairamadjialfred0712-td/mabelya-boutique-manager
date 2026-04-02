@@ -284,6 +284,7 @@ export default function Sales() {
                 <TableHead>Paiement</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
                 <TableHead className="hidden lg:table-cell">Date</TableHead>
+                {(isSuperAdmin || isAdminBoutique) && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
