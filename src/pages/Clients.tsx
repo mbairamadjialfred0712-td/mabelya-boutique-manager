@@ -419,29 +419,40 @@ export default function Clients() {
                         {c.status}
                       </Badge>
                     </TableCell>
-                    {isSuperAdmin && (
+                    {(isSuperAdmin || isAdminBoutique) && (
                       <TableCell className="text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Le client « {c.full_name} » sera définitivement supprimé. Cette action est irréversible.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteClient.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Supprimer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => archiveClient.mutate({ id: c.id, archive: !(c as any).is_archived })}
+                            title={(c as any).is_archived ? "Restaurer" : "Archiver"}
+                          >
+                            {(c as any).is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Le client « {c.full_name} » sera définitivement supprimé. Cette action est irréversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteClient.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
