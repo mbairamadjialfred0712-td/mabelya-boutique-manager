@@ -7,7 +7,7 @@ import { CountryFilter } from "@/components/dashboard/CountryFilter";
 import { FeatureCards } from "@/components/dashboard/FeatureCards";
 import { StatCards } from "@/components/dashboard/StatCards";
 import { TopProductsChart, RevenueByCountryChart } from "@/components/dashboard/DashboardCharts";
-import { NetProfitSection } from "@/components/dashboard/NetProfitSection";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
