@@ -1,33 +1,44 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-interface ProfitRow {
+export type PeriodType = "mensuel" | "trimestriel" | "annuel";
+
+export interface ProfitRow {
   label: string;
-  revenueMonth: number;
-  revenueYear: number;
-  expensesMonth: number;
-  expensesYear: number;
-  salariesMonth: number;
-  adsMonth: number;
-  adsYear: number;
-  profitMonth: number;
-  profitYear: number;
+  revenue: number;
+  expenses: number;
+  salaries: number;
+  ads: number;
+  totalCharges: number;
+  profit: number;
+  margin: number; // percentage
 }
 
-export function useNetProfit() {
-  return useQuery({
-    queryKey: ["net-profit-dashboard"],
-    queryFn: async () => {
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const yearStart = new Date(now.getFullYear(), 0, 1).toISOString();
+function getPeriodRange(period: PeriodType): { start: Date; months: number } {
+  const now = new Date();
+  switch (period) {
+    case "mensuel":
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), months: 1 };
+    case "trimestriel":
+      return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1), months: 3 };
+    case "annuel":
+      return { start: new Date(now.getFullYear(), 0, 1), months: now.getMonth() + 1 };
+  }
+}
 
-      // Fetch all data in parallel
+export function useNetProfit(period: PeriodType) {
+  return useQuery({
+    queryKey: ["net-profit-dashboard", period],
+    queryFn: async () => {
+      const { start, months } = getPeriodRange(period);
+      const startISO = start.toISOString();
+      const startDate = startISO.split("T")[0];
+
       const [salesRes, expensesRes, staffRes, adsRes, boutiquesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", yearStart),
-        supabase.from("expenses").select("amount, boutique_id, expense_date, boutiques(name, country_id, countries(name))").gte("expense_date", yearStart.split("T")[0]),
+        supabase.from("sales").select("total_amount, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", startISO),
+        supabase.from("expenses").select("amount, boutique_id, expense_date, boutiques(name, country_id, countries(name))").gte("expense_date", startDate),
         supabase.from("staff").select("salary, boutique_id, is_active, boutiques(name, country_id, countries(name))").eq("is_active", true),
-        supabase.from("ad_campaigns").select("spent, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", yearStart),
+        supabase.from("ad_campaigns").select("spent, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", startISO),
         supabase.from("boutiques").select("id, name, country_id, countries(name)"),
       ]);
 
@@ -37,107 +48,67 @@ export function useNetProfit() {
       const ads = adsRes.data ?? [];
       const boutiques = boutiquesRes.data ?? [];
 
-      const isThisMonth = (dateStr: string) => dateStr >= monthStart;
-
       // Build per-boutique stats
       const boutiqueMap: Record<string, {
         name: string; country: string;
-        revM: number; revY: number;
-        expM: number; expY: number;
-        salM: number;
-        adsM: number; adsY: number;
+        rev: number; exp: number; sal: number; ads: number;
       }> = {};
 
       for (const b of boutiques) {
         const country = (b.countries as any)?.name ?? "Autre";
-        boutiqueMap[b.id] = { name: b.name, country, revM: 0, revY: 0, expM: 0, expY: 0, salM: 0, adsM: 0, adsY: 0 };
+        boutiqueMap[b.id] = { name: b.name, country, rev: 0, exp: 0, sal: 0, ads: 0 };
       }
 
       for (const s of sales) {
         const bm = boutiqueMap[s.boutique_id];
-        if (!bm) continue;
-        const amt = Number(s.total_amount);
-        bm.revY += amt;
-        if (isThisMonth(s.created_at)) bm.revM += amt;
+        if (bm) bm.rev += Number(s.total_amount);
       }
 
       for (const e of expenses) {
         const bm = boutiqueMap[e.boutique_id];
-        if (!bm) continue;
-        const amt = Number(e.amount);
-        bm.expY += amt;
-        if (e.expense_date >= monthStart.split("T")[0]) bm.expM += amt;
+        if (bm) bm.exp += Number(e.amount);
       }
 
       for (const st of staffList) {
         const bm = boutiqueMap[st.boutique_id];
-        if (!bm) continue;
-        bm.salM += Number(st.salary);
+        if (bm) bm.sal += Number(st.salary) * months;
       }
 
       for (const a of ads) {
         const bm = boutiqueMap[a.boutique_id];
-        if (!bm) continue;
-        const amt = Number(a.spent);
-        bm.adsY += amt;
-        if (isThisMonth(a.created_at)) bm.adsM += amt;
+        if (bm) bm.ads += Number(a.spent);
       }
 
-      // Aggregate by boutique
-      const byBoutique: ProfitRow[] = Object.values(boutiqueMap).map((b) => {
-        const totalExpM = b.expM + b.salM + b.adsM;
-        const totalExpY = b.expY + (b.salM * new Date().getMonth() + b.salM) + b.adsY; // approx annual salaries
-        const salY = b.salM * (now.getMonth() + 1);
+      const toRow = (label: string, rev: number, exp: number, sal: number, ad: number): ProfitRow => {
+        const totalCharges = exp + sal + ad;
+        const profit = rev - totalCharges;
         return {
-          label: b.name,
-          revenueMonth: b.revM,
-          revenueYear: b.revY,
-          expensesMonth: b.expM,
-          expensesYear: b.expY,
-          salariesMonth: b.salM,
-          adsMonth: b.adsM,
-          adsYear: b.adsY,
-          profitMonth: b.revM - totalExpM,
-          profitYear: b.revY - (b.expY + salY + b.adsY),
+          label, revenue: rev, expenses: exp, salaries: sal, ads: ad,
+          totalCharges, profit, margin: rev > 0 ? (profit / rev) * 100 : 0,
         };
-      });
+      };
 
-      // Aggregate by country
-      const countryMap: Record<string, ProfitRow> = {};
+      // By boutique
+      const byBoutique: ProfitRow[] = Object.values(boutiqueMap).map(b =>
+        toRow(b.name, b.rev, b.exp, b.sal, b.ads)
+      );
+
+      // By country
+      const countryAgg: Record<string, { rev: number; exp: number; sal: number; ads: number }> = {};
       for (const b of Object.values(boutiqueMap)) {
-        if (!countryMap[b.country]) {
-          countryMap[b.country] = { label: b.country, revenueMonth: 0, revenueYear: 0, expensesMonth: 0, expensesYear: 0, salariesMonth: 0, adsMonth: 0, adsYear: 0, profitMonth: 0, profitYear: 0 };
-        }
-        const c = countryMap[b.country];
-        c.revenueMonth += b.revM;
-        c.revenueYear += b.revY;
-        c.expensesMonth += b.expM;
-        c.expensesYear += b.expY;
-        c.salariesMonth += b.salM;
-        c.adsMonth += b.adsM;
-        c.adsYear += b.adsY;
+        if (!countryAgg[b.country]) countryAgg[b.country] = { rev: 0, exp: 0, sal: 0, ads: 0 };
+        const c = countryAgg[b.country];
+        c.rev += b.rev; c.exp += b.exp; c.sal += b.sal; c.ads += b.ads;
       }
-      const byCountry: ProfitRow[] = Object.values(countryMap).map((c) => ({
-        ...c,
-        profitMonth: c.revenueMonth - (c.expensesMonth + c.salariesMonth + c.adsMonth),
-        profitYear: c.revenueYear - (c.expensesYear + c.salariesMonth * (now.getMonth() + 1) + c.adsYear),
-      }));
+      const byCountry: ProfitRow[] = Object.entries(countryAgg).map(([name, c]) =>
+        toRow(name, c.rev, c.exp, c.sal, c.ads)
+      );
 
       // Global
-      const global: ProfitRow = {
-        label: "Global",
-        revenueMonth: byCountry.reduce((s, c) => s + c.revenueMonth, 0),
-        revenueYear: byCountry.reduce((s, c) => s + c.revenueYear, 0),
-        expensesMonth: byCountry.reduce((s, c) => s + c.expensesMonth, 0),
-        expensesYear: byCountry.reduce((s, c) => s + c.expensesYear, 0),
-        salariesMonth: byCountry.reduce((s, c) => s + c.salariesMonth, 0),
-        adsMonth: byCountry.reduce((s, c) => s + c.adsMonth, 0),
-        adsYear: byCountry.reduce((s, c) => s + c.adsYear, 0),
-        profitMonth: 0,
-        profitYear: 0,
-      };
-      global.profitMonth = global.revenueMonth - (global.expensesMonth + global.salariesMonth + global.adsMonth);
-      global.profitYear = global.revenueYear - (global.expensesYear + global.salariesMonth * (now.getMonth() + 1) + global.adsYear);
+      const g = byCountry.reduce((acc, c) => ({
+        rev: acc.rev + c.revenue, exp: acc.exp + c.expenses, sal: acc.sal + c.salaries, ads: acc.ads + c.ads
+      }), { rev: 0, exp: 0, sal: 0, ads: 0 });
+      const global = toRow("Global", g.rev, g.exp, g.sal, g.ads);
 
       return { global, byCountry, byBoutique };
     },
