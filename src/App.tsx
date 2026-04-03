@@ -117,6 +117,13 @@ const App = () => (
                 </RoleGuard>
               </ProtectedRoute>
             } />
+            <Route path="/net-profit" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <NetProfit />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

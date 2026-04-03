@@ -50,6 +50,7 @@ const navItems: NavItem[] = [
   { title: "Personnel", url: "/staff", icon: UserCheck, allowedRoles: ["super_admin", "admin_boutique"] },
   { title: "Ads Campaigns", url: "/ads", icon: Megaphone, allowedRoles: ["super_admin", "admin_boutique"] },
   { title: "Analyse Pays", url: "/country-analysis", icon: Globe, allowedRoles: ["super_admin"] },
+  { title: "Bénéfice Net", url: "/net-profit", icon: TrendingUp, allowedRoles: ["super_admin"] },
   { title: "Rapports", url: "/reports", icon: BarChart3 },
   { title: "Utilisateurs", url: "/users", icon: Users, allowedRoles: ["super_admin"] },
   { title: "Activités", url: "/activity", icon: Activity, allowedRoles: ["super_admin"] },
