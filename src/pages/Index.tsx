@@ -288,8 +288,8 @@ export default function Dashboard() {
         <RevenueByCountryChart data={revenueByCountry ?? []} />
       </div>
 
-      {/* Net Profit Section — Super Admin only */}
-      {isSuperAdmin && <NetProfitSection />}
+
+
 
       <Card>
         <CardHeader>
