@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type PeriodType = "mensuel" | "trimestriel" | "annuel";
-
 export interface ProfitRow {
   label: string;
   revenue: number;
@@ -11,34 +9,18 @@ export interface ProfitRow {
   ads: number;
   totalCharges: number;
   profit: number;
-  margin: number; // percentage
+  margin: number;
 }
 
-function getPeriodRange(period: PeriodType): { start: Date; months: number } {
-  const now = new Date();
-  switch (period) {
-    case "mensuel":
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), months: 1 };
-    case "trimestriel":
-      return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1), months: 3 };
-    case "annuel":
-      return { start: new Date(now.getFullYear(), 0, 1), months: now.getMonth() + 1 };
-  }
-}
-
-export function useNetProfit(period: PeriodType) {
+export function useNetProfit() {
   return useQuery({
-    queryKey: ["net-profit-dashboard", period],
+    queryKey: ["net-profit-all"],
     queryFn: async () => {
-      const { start, months } = getPeriodRange(period);
-      const startISO = start.toISOString();
-      const startDate = startISO.split("T")[0];
-
       const [salesRes, expensesRes, staffRes, adsRes, boutiquesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", startISO),
-        supabase.from("expenses").select("amount, boutique_id, expense_date, boutiques(name, country_id, countries(name))").gte("expense_date", startDate),
+        supabase.from("sales").select("total_amount, boutique_id, boutiques(name, country_id, countries(name))"),
+        supabase.from("expenses").select("amount, boutique_id, boutiques(name, country_id, countries(name))"),
         supabase.from("staff").select("salary, boutique_id, is_active, boutiques(name, country_id, countries(name))").eq("is_active", true),
-        supabase.from("ad_campaigns").select("spent, boutique_id, created_at, boutiques(name, country_id, countries(name))").gte("created_at", startISO),
+        supabase.from("ad_campaigns").select("spent, boutique_id, boutiques(name, country_id, countries(name))"),
         supabase.from("boutiques").select("id, name, country_id, countries(name)"),
       ]);
 
@@ -48,7 +30,6 @@ export function useNetProfit(period: PeriodType) {
       const ads = adsRes.data ?? [];
       const boutiques = boutiquesRes.data ?? [];
 
-      // Build per-boutique stats
       const boutiqueMap: Record<string, {
         name: string; country: string;
         rev: number; exp: number; sal: number; ads: number;
@@ -69,9 +50,10 @@ export function useNetProfit(period: PeriodType) {
         if (bm) bm.exp += Number(e.amount);
       }
 
+      // Salary = monthly salary (just one month snapshot)
       for (const st of staffList) {
         const bm = boutiqueMap[st.boutique_id];
-        if (bm) bm.sal += Number(st.salary) * months;
+        if (bm) bm.sal += Number(st.salary);
       }
 
       for (const a of ads) {
@@ -88,12 +70,10 @@ export function useNetProfit(period: PeriodType) {
         };
       };
 
-      // By boutique
       const byBoutique: ProfitRow[] = Object.values(boutiqueMap).map(b =>
         toRow(b.name, b.rev, b.exp, b.sal, b.ads)
       );
 
-      // By country
       const countryAgg: Record<string, { rev: number; exp: number; sal: number; ads: number }> = {};
       for (const b of Object.values(boutiqueMap)) {
         if (!countryAgg[b.country]) countryAgg[b.country] = { rev: 0, exp: 0, sal: 0, ads: 0 };
@@ -104,7 +84,6 @@ export function useNetProfit(period: PeriodType) {
         toRow(name, c.rev, c.exp, c.sal, c.ads)
       );
 
-      // Global
       const g = byCountry.reduce((acc, c) => ({
         rev: acc.rev + c.revenue, exp: acc.exp + c.expenses, sal: acc.sal + c.salaries, ads: acc.ads + c.ads
       }), { rev: 0, exp: 0, sal: 0, ads: 0 });
