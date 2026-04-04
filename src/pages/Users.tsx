@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { UserPlus, Shield, ShieldCheck, Store, Trash2, Camera, Search, Download } from "lucide-react";
+import { UserPlus, Shield, ShieldCheck, Store, Trash2, Camera, Search, Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
 import { logActivity } from "@/hooks/useActivityLog";
@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import type { Database } from "@/integrations/supabase/types";
+import { EditUserDialog } from "@/components/users/EditUserDialog";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -45,6 +46,7 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [editUser, setEditUser] = useState<{ userId: string; name: string; role: string } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: userRoles, isLoading } = useQuery({
@@ -256,9 +258,14 @@ export default function Users() {
                       </TableCell>
                       <TableCell className="text-right">
                         {u.role !== "super_admin" && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteRole.mutate(u.id)} className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => setEditUser({ userId: u.user_id, name: u.profile?.full_name || "Utilisateur", role: u.role })} title="Modifier l'affectation">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteRole.mutate(u.id)} className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -271,6 +278,15 @@ export default function Users() {
           </Table>
         </CardContent>
       </Card>
+      {editUser && (
+        <EditUserDialog
+          open={!!editUser}
+          onOpenChange={(v) => { if (!v) setEditUser(null); }}
+          userId={editUser.userId}
+          userName={editUser.name}
+          userRole={editUser.role}
+        />
+      )}
     </div>
   );
 }
