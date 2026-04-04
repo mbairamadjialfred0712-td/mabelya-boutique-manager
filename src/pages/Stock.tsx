@@ -32,6 +32,23 @@ export default function Stock() {
   const isVendeur = !isSuperAdmin && !isAdminBoutique;
   const canManage = isSuperAdmin || isAdminBoutique;
 
+  // Récupérer le pays du vendeur via la table staff
+  const { data: vendeurStaff } = useQuery({
+    queryKey: ["staff-vendeur", user?.id],
+    enabled: isVendeur && !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("staff")
+        .select("boutique_id, country_id, boutiques(country_id)")
+        .eq("user_id", user!.id)
+        .eq("is_active", true)
+        .single();
+      return data;
+    },
+  });
+
+  const vendeurCountryId = vendeurStaff?.country_id ?? (vendeurStaff?.boutiques as any)?.country_id;
+
   const { data: countries } = useQuery({
     queryKey: ["countries"],
     queryFn: async () => {
