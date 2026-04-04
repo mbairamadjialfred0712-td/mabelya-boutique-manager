@@ -59,18 +59,22 @@ export default function Stock() {
   });
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ["products", isVendeur ? user?.id : "all", showArchived, vendeurCountryId],
+    queryKey: ["products", needsCountryFilter ? user?.id : "all", showArchived, myCountryId],
     queryFn: async () => {
       let query = supabase
         .from("products")
         .select("*, categories(name), boutiques!inner(name, country_id, countries(name))")
         .order("created_at", { ascending: false });
 
-      if (isVendeur) {
-        // Vendeur voit uniquement les produits en stock non archivés de son pays
-        query = query.gt("stock_quantity", 0).eq("is_archived", false);
-        if (vendeurCountryId) {
-          query = query.eq("boutiques.country_id", vendeurCountryId);
+      if (needsCountryFilter && myCountryId) {
+        // Vendeur et Gérant voient uniquement les produits de leur pays
+        query = query.eq("boutiques.country_id", myCountryId);
+        if (isVendeur) {
+          query = query.gt("stock_quantity", 0).eq("is_archived", false);
+        } else if (showArchived) {
+          query = query.eq("is_archived", true);
+        } else {
+          query = query.eq("is_archived", false);
         }
       } else if (showArchived) {
         query = query.eq("is_archived", true);
@@ -82,7 +86,7 @@ export default function Stock() {
       if (error) throw error;
       return data;
     },
-    enabled: !isVendeur || !!vendeurCountryId,
+    enabled: !needsCountryFilter || !!myCountryId,
   });
 
   const { data: categories } = useQuery({
