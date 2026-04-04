@@ -32,6 +32,23 @@ export default function Stock() {
   const isVendeur = !isSuperAdmin && !isAdminBoutique;
   const canManage = isSuperAdmin || isAdminBoutique;
 
+  // Récupérer le pays du vendeur via la table staff
+  const { data: vendeurStaff } = useQuery({
+    queryKey: ["staff-vendeur", user?.id],
+    enabled: isVendeur && !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("staff")
+        .select("boutique_id, country_id, boutiques(country_id)")
+        .eq("user_id", user!.id)
+        .eq("is_active", true)
+        .single();
+      return data;
+    },
+  });
+
+  const vendeurCountryId = vendeurStaff?.country_id ?? (vendeurStaff?.boutiques as any)?.country_id;
+
   const { data: countries } = useQuery({
     queryKey: ["countries"],
     queryFn: async () => {
@@ -41,21 +58,22 @@ export default function Stock() {
   });
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ["products", isVendeur ? user?.id : "all", showArchived],
+    queryKey: ["products", isVendeur ? user?.id : "all", showArchived, vendeurCountryId],
     queryFn: async () => {
       let query = supabase
         .from("products")
-        .select("*, categories(name), boutiques(name, country_id, countries(name))")
+        .select("*, categories(name), boutiques!inner(name, country_id, countries(name))")
         .order("created_at", { ascending: false });
 
       if (isVendeur) {
-        // Vendeur voit uniquement les produits en stock non archivés
+        // Vendeur voit uniquement les produits en stock non archivés de son pays
         query = query.gt("stock_quantity", 0).eq("is_archived", false);
+        if (vendeurCountryId) {
+          query = query.eq("boutiques.country_id", vendeurCountryId);
+        }
       } else if (showArchived) {
-        // Admin — voir les archivés
         query = query.eq("is_archived", true);
       } else {
-        // Admin — voir les actifs
         query = query.eq("is_archived", false);
       }
 
@@ -63,6 +81,7 @@ export default function Stock() {
       if (error) throw error;
       return data;
     },
+    enabled: !isVendeur || !!vendeurCountryId,
   });
 
   const { data: categories } = useQuery({

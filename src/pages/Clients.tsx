@@ -56,15 +56,16 @@ export default function Clients() {
     },
   });
 
-  // Récupérer la boutique du vendeur
+  // Récupérer les infos staff du vendeur (pays + boutique)
   const { data: staffData } = useQuery({
-    queryKey: ["staff-boutique", user?.id],
+    queryKey: ["staff-vendeur", user?.id],
     enabled: isVendeur && !!user?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from("staff")
-        .select("boutique_id, boutiques(id, name)")
-        .eq("id", user!.id)
+        .select("boutique_id, country_id, boutiques(id, name, country_id)")
+        .eq("user_id", user!.id)
+        .eq("is_active", true)
         .single();
       return data;
     },
@@ -78,16 +79,16 @@ export default function Clients() {
         .select("*, countries(name), boutiques(name, countries(name))")
         .order("created_at", { ascending: false });
 
-      // Vendeur voit uniquement les clients de sa boutique
-      if (isVendeur && staffData?.boutique_id) {
-        query = query.eq("boutique_id", staffData.boutique_id);
+      // Vendeur voit uniquement les clients qu'il a créés
+      if (isVendeur) {
+        query = query.eq("created_by", user!.id);
       }
 
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
-    enabled: !isVendeur || !!staffData,
+    enabled: !isVendeur || !!user?.id,
   });
 
   const addClient = useMutation({
