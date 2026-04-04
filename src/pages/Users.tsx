@@ -278,6 +278,15 @@ export default function Users() {
           </Table>
         </CardContent>
       </Card>
+      {editUser && (
+        <EditUserDialog
+          open={!!editUser}
+          onOpenChange={(v) => { if (!v) setEditUser(null); }}
+          userId={editUser.userId}
+          userName={editUser.name}
+          userRole={editUser.role}
+        />
+      )}
     </div>
   );
 }
