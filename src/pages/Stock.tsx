@@ -32,10 +32,11 @@ export default function Stock() {
   const isVendeur = !isSuperAdmin && !isAdminBoutique;
   const canManage = isSuperAdmin || isAdminBoutique;
 
-  // Récupérer le pays du vendeur via la table staff
-  const { data: vendeurStaff } = useQuery({
+  // Récupérer le pays du vendeur/gérant via la table staff
+  const needsCountryFilter = !isSuperAdmin;
+  const { data: myStaff } = useQuery({
     queryKey: ["staff-vendeur", user?.id],
-    enabled: isVendeur && !!user?.id,
+    enabled: needsCountryFilter && !!user?.id,
     queryFn: async () => {
       const { data } = await supabase
         .from("staff")
@@ -47,7 +48,7 @@ export default function Stock() {
     },
   });
 
-  const vendeurCountryId = vendeurStaff?.country_id ?? (vendeurStaff?.boutiques as any)?.country_id;
+  const myCountryId = myStaff?.country_id ?? (myStaff?.boutiques as any)?.country_id;
 
   const { data: countries } = useQuery({
     queryKey: ["countries"],
