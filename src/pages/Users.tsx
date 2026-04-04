@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import type { Database } from "@/integrations/supabase/types";
+import { EditUserDialog } from "@/components/users/EditUserDialog";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
