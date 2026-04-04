@@ -27,6 +27,7 @@ const featureCards = [
   { title: "Gestion du Personnel", description: "Équipes, salaires et paiements.", icon: UserCheck, color: "bg-[hsl(350,70%,55%)]", url: "/staff" },
   { title: "Campagnes Ads", description: "Budgets Facebook & Instagram.", icon: Megaphone, color: "bg-[hsl(230,75%,55%)]", url: "/ads" },
   { title: "Analyse Pays", description: "Analyses spécifiques par pays.", icon: Globe, color: "bg-[hsl(152,55%,45%)]", url: "/country-analysis" },
+  { title: "Bénéfice Net", description: "CA, charges et rentabilité.", icon: TrendingUp, color: "bg-[hsl(280,60%,50%)]", url: "/net-profit" },
 ];
 
 export default function Dashboard() {
