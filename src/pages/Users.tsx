@@ -258,9 +258,14 @@ export default function Users() {
                       </TableCell>
                       <TableCell className="text-right">
                         {u.role !== "super_admin" && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteRole.mutate(u.id)} className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => setEditUser({ userId: u.user_id, name: u.profile?.full_name || "Utilisateur", role: u.role })} title="Modifier l'affectation">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteRole.mutate(u.id)} className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
