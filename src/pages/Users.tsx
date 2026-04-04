@@ -46,6 +46,7 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [editUser, setEditUser] = useState<{ userId: string; name: string; role: string } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: userRoles, isLoading } = useQuery({
