@@ -48,7 +48,7 @@ export function useNetProfit(period: PeriodKey = "all") {
       let salesQ = supabase.from("sales").select("total_amount, boutique_id, created_at, boutiques(name, country_id, countries(name))");
       let expensesQ = supabase.from("expenses").select("amount, boutique_id, expense_date, boutiques(name, country_id, countries(name))");
       let staffQ = supabase.from("staff").select("salary, boutique_id, is_active, boutiques(name, country_id, countries(name))").eq("is_active", true);
-      let adsQ = supabase.from("ad_campaigns").select("spent, boutique_id, start_date, boutiques(name, country_id, countries(name))");
+      let adsQ = supabase.from("ad_campaigns").select("spent, budget, boutique_id, start_date, boutiques(name, country_id, countries(name))");
       let saleItemsQ = supabase.from("sale_items").select("quantity, unit_price, total_price, product_id, sale_id, products(name, purchase_price), sales!inner(created_at)");
 
       if (dateFrom) {
