@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SummaryCards } from "@/components/net-profit/SummaryCards";
 import { ProductProfitTable } from "@/components/net-profit/ProductProfitTable";
 import { PeriodFilter } from "@/components/net-profit/PeriodFilter";
+import { StockSummarySection } from "@/components/stock/StockSummarySection";
 
 export default function NetProfit() {
   const [period, setPeriod] = useState<PeriodKey>("month");
@@ -85,6 +86,10 @@ export default function NetProfit() {
           </CardContent>
         </Tabs>
       </Card>
+
+
+      {/* Stock Général */}
+      <StockSummarySection showFilters={true} countries={[]} boutiques={[]} />
 
       {/* Explanation card */}
       <Card className="bg-muted/30 border-dashed">

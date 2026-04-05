@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Globe, TrendingUp, Package, Users } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { StockSummarySection } from "@/components/stock/StockSummarySection";
 
 export default function CountryAnalysis() {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
@@ -143,6 +144,13 @@ export default function CountryAnalysis() {
           )}
         </CardContent>
       </Card>
+
+      {/* Stock Général */}
+      <StockSummarySection
+        countries={countries ?? []}
+        boutiques={[]}
+        showFilters={true}
+      />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import { AddProductForm } from "@/components/stock/AddProductForm";
 import { EditProductDialog } from "@/components/stock/EditProductDialog";
+import { StockSummarySection } from "@/components/stock/StockSummarySection";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
@@ -412,6 +413,15 @@ export default function Stock() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Stock Summary Section */}
+      {canManage && (
+        <StockSummarySection
+          countries={countries ?? []}
+          boutiques={boutiques ?? []}
+          showFilters={isSuperAdmin}
+        />
+      )}
 
       {editProduct && canManage && (
         <EditProductDialog
