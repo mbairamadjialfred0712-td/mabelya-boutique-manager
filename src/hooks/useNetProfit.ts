@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export type PeriodKey = "week" | "month" | "quarter" | "60days" | "90days" | "year" | "all";
+
 export interface ProfitRow {
   label: string;
   revenue: number;
@@ -12,16 +14,57 @@ export interface ProfitRow {
   margin: number;
 }
 
-export function useNetProfit() {
+export interface ProductProfitRow {
+  name: string;
+  quantitySold: number;
+  totalRevenue: number;
+  totalCost: number;
+  grossProfit: number;
+  margin: number;
+}
+
+function getDateFrom(period: PeriodKey): string | null {
+  if (period === "all") return null;
+  const now = new Date();
+  const d = new Date();
+  switch (period) {
+    case "week": d.setDate(now.getDate() - 7); break;
+    case "month": d.setMonth(now.getMonth() - 1); break;
+    case "quarter": d.setMonth(now.getMonth() - 3); break;
+    case "60days": d.setDate(now.getDate() - 60); break;
+    case "90days": d.setDate(now.getDate() - 90); break;
+    case "year": d.setFullYear(now.getFullYear() - 1); break;
+  }
+  return d.toISOString();
+}
+
+export function useNetProfit(period: PeriodKey = "all") {
   return useQuery({
-    queryKey: ["net-profit-all"],
+    queryKey: ["net-profit-all", period],
     queryFn: async () => {
-      const [salesRes, expensesRes, staffRes, adsRes, boutiquesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, boutique_id, boutiques(name, country_id, countries(name))"),
-        supabase.from("expenses").select("amount, boutique_id, boutiques(name, country_id, countries(name))"),
-        supabase.from("staff").select("salary, boutique_id, is_active, boutiques(name, country_id, countries(name))").eq("is_active", true),
-        supabase.from("ad_campaigns").select("spent, boutique_id, boutiques(name, country_id, countries(name))"),
+      const dateFrom = getDateFrom(period);
+
+      // Build queries with optional date filter
+      let salesQ = supabase.from("sales").select("total_amount, boutique_id, created_at, boutiques(name, country_id, countries(name))");
+      let expensesQ = supabase.from("expenses").select("amount, boutique_id, expense_date, boutiques(name, country_id, countries(name))");
+      let staffQ = supabase.from("staff").select("salary, boutique_id, is_active, boutiques(name, country_id, countries(name))").eq("is_active", true);
+      let adsQ = supabase.from("ad_campaigns").select("spent, boutique_id, start_date, boutiques(name, country_id, countries(name))");
+      let saleItemsQ = supabase.from("sale_items").select("quantity, unit_price, total_price, product_id, sale_id, products(name, purchase_price), sales!inner(created_at)");
+
+      if (dateFrom) {
+        salesQ = salesQ.gte("created_at", dateFrom);
+        expensesQ = expensesQ.gte("expense_date", dateFrom.split("T")[0]);
+        adsQ = adsQ.gte("start_date", dateFrom.split("T")[0]);
+        saleItemsQ = saleItemsQ.gte("sales.created_at", dateFrom);
+      }
+
+      const [salesRes, expensesRes, staffRes, adsRes, boutiquesRes, saleItemsRes] = await Promise.all([
+        salesQ,
+        expensesQ,
+        staffQ,
+        adsQ,
         supabase.from("boutiques").select("id, name, country_id, countries(name)"),
+        saleItemsQ,
       ]);
 
       const sales = salesRes.data ?? [];
@@ -29,7 +72,9 @@ export function useNetProfit() {
       const staffList = staffRes.data ?? [];
       const ads = adsRes.data ?? [];
       const boutiques = boutiquesRes.data ?? [];
+      const saleItems = saleItemsRes.data ?? [];
 
+      // Boutique aggregation
       const boutiqueMap: Record<string, {
         name: string; country: string;
         rev: number; exp: number; sal: number; ads: number;
@@ -44,18 +89,14 @@ export function useNetProfit() {
         const bm = boutiqueMap[s.boutique_id];
         if (bm) bm.rev += Number(s.total_amount);
       }
-
       for (const e of expenses) {
         const bm = boutiqueMap[e.boutique_id];
         if (bm) bm.exp += Number(e.amount);
       }
-
-      // Salary = monthly salary (just one month snapshot)
       for (const st of staffList) {
         const bm = boutiqueMap[st.boutique_id];
         if (bm) bm.sal += Number(st.salary);
       }
-
       for (const a of ads) {
         const bm = boutiqueMap[a.boutique_id];
         if (bm) bm.ads += Number(a.spent);
@@ -89,7 +130,44 @@ export function useNetProfit() {
       }), { rev: 0, exp: 0, sal: 0, ads: 0 });
       const global = toRow("Global", g.rev, g.exp, g.sal, g.ads);
 
-      return { global, byCountry, byBoutique };
+      // Product profit calculation (Bénéfice Brut Articles)
+      const productAgg: Record<string, { name: string; qty: number; rev: number; cost: number }> = {};
+      for (const item of saleItems) {
+        const pid = item.product_id;
+        const productData = item.products as any;
+        const purchasePrice = Number(productData?.purchase_price ?? 0);
+        const name = productData?.name ?? "Produit inconnu";
+        if (!productAgg[pid]) productAgg[pid] = { name, qty: 0, rev: 0, cost: 0 };
+        const p = productAgg[pid];
+        p.qty += Number(item.quantity);
+        p.rev += Number(item.total_price);
+        p.cost += purchasePrice * Number(item.quantity);
+      }
+
+      const productProfits: ProductProfitRow[] = Object.values(productAgg)
+        .map(p => ({
+          name: p.name,
+          quantitySold: p.qty,
+          totalRevenue: p.rev,
+          totalCost: p.cost,
+          grossProfit: p.rev - p.cost,
+          margin: p.rev > 0 ? ((p.rev - p.cost) / p.rev) * 100 : 0,
+        }))
+        .sort((a, b) => b.grossProfit - a.grossProfit);
+
+      const totalGrossProfit = productProfits.reduce((s, p) => s + p.grossProfit, 0);
+      const totalProductRevenue = productProfits.reduce((s, p) => s + p.totalRevenue, 0);
+      const totalProductCost = productProfits.reduce((s, p) => s + p.totalCost, 0);
+
+      return {
+        global,
+        byCountry,
+        byBoutique,
+        productProfits,
+        totalGrossProfit,
+        totalProductRevenue,
+        totalProductCost,
+      };
     },
   });
 }
