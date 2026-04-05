@@ -99,7 +99,11 @@ export function useNetProfit(period: PeriodKey = "all") {
       }
       for (const a of ads) {
         const bm = boutiqueMap[a.boutique_id];
-        if (bm) bm.ads += Number(a.spent);
+        if (bm) {
+          const spent = Number(a.spent);
+          const budget = Number((a as any).budget ?? 0);
+          bm.ads += spent > 0 ? spent : budget;
+        }
       }
 
       const toRow = (label: string, rev: number, exp: number, sal: number, ad: number): ProfitRow => {
