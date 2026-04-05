@@ -414,6 +414,15 @@ export default function Stock() {
         </CardContent>
       </Card>
 
+      {/* Stock Summary Section */}
+      {canManage && (
+        <StockSummarySection
+          countries={countries ?? []}
+          boutiques={boutiques ?? []}
+          showFilters={isSuperAdmin}
+        />
+      )}
+
       {editProduct && canManage && (
         <EditProductDialog
           product={editProduct}

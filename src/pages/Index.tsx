@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Receipt, UserCheck, Megaphone, Globe, ShoppingCart, Clock, TrendingUp, Package, AlertTriangle } from "lucide-react";
+import { StockSummarySection } from "@/components/stock/StockSummarySection";
 import { CountryFilter } from "@/components/dashboard/CountryFilter";
 import { FeatureCards } from "@/components/dashboard/FeatureCards";
 import { StatCards } from "@/components/dashboard/StatCards";
@@ -288,6 +289,13 @@ export default function Dashboard() {
         <TopProductsChart topProducts={topProducts ?? []} />
         <RevenueByCountryChart data={revenueByCountry ?? []} />
       </div>
+
+      {/* Stock Général */}
+      <StockSummarySection
+        countries={countries ?? []}
+        boutiques={[]}
+        showFilters={true}
+      />
 
 
 
