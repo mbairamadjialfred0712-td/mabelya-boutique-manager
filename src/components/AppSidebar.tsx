@@ -15,6 +15,7 @@ import {
   UserRound,
   TrendingUp,
   Wallet,
+  WalletCards,
   Trash2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { title: "Rapports", url: "/reports", icon: BarChart3 },
   { title: "Utilisateurs", url: "/users", icon: Users, allowedRoles: ["super_admin"] },
   { title: "Mes Dépenses", url: "/my-expenses", icon: Wallet, allowedRoles: ["sales_staff", "admin_boutique"] },
+  { title: "Dépenses Utilisateurs", url: "/staff-expenses", icon: WalletCards, allowedRoles: ["super_admin"] },
   { title: "Activités", url: "/activity", icon: Activity, allowedRoles: ["super_admin"] },
   { title: "Corbeille", url: "/trash", icon: Trash2, allowedRoles: ["super_admin"] },
   { title: "Paramètres", url: "/settings", icon: Settings, allowedRoles: ["super_admin"] },
