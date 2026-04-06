@@ -12,7 +12,8 @@ import { Navigate } from "react-router-dom";
 const ACTION_ICONS: Record<string, typeof Activity> = {
   login: LogIn, logout: LogOut, sale: ShoppingCart, product_add: Package,
   user_create: UserPlus, expense_add: Receipt, profile_update: UserCog,
-  product_update: Package, product_delete: Package,
+  product_update: Package, product_delete: Package, staff_expense: Receipt,
+  restore_product: Package, restore_client: UserPlus,
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -20,6 +21,8 @@ const ACTION_LABELS: Record<string, string> = {
   product_add: "Produit ajouté", product_update: "Produit modifié",
   product_delete: "Produit supprimé", user_create: "Utilisateur créé",
   expense_add: "Dépense ajoutée", profile_update: "Profil modifié",
+  staff_expense: "Dépense personnelle", restore_product: "Produit restauré",
+  restore_client: "Client restauré",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -30,6 +33,9 @@ const ACTION_COLORS: Record<string, string> = {
   user_create: "bg-purple-500/10 text-purple-600",
   expense_add: "bg-orange-500/10 text-orange-600",
   profile_update: "bg-cyan-500/10 text-cyan-600",
+  staff_expense: "bg-amber-500/10 text-amber-600",
+  restore_product: "bg-teal-500/10 text-teal-600",
+  restore_client: "bg-teal-500/10 text-teal-600",
 };
 
 export default function ActivityLog() {
