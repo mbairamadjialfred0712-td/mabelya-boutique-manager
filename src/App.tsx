@@ -22,6 +22,8 @@ import Settings from "./pages/Settings";
 import ActivityLog from "./pages/ActivityLog";
 import Clients from "./pages/Clients";
 import NetProfit from "./pages/NetProfit";
+import MyExpenses from "./pages/MyExpenses";
+import TrashPage from "./pages/Trash";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -121,6 +123,20 @@ const App = () => (
               <ProtectedRoute>
                 <RoleGuard allowedRoles={["super_admin"]}>
                   <NetProfit />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/my-expenses" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["sales_staff", "admin_boutique"]}>
+                  <MyExpenses />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/trash" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <TrashPage />
                 </RoleGuard>
               </ProtectedRoute>
             } />
