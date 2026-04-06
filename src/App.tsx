@@ -23,6 +23,7 @@ import ActivityLog from "./pages/ActivityLog";
 import Clients from "./pages/Clients";
 import NetProfit from "./pages/NetProfit";
 import MyExpenses from "./pages/MyExpenses";
+import StaffExpenses from "./pages/StaffExpenses";
 import TrashPage from "./pages/Trash";
 import NotFound from "./pages/NotFound";
 
@@ -130,6 +131,13 @@ const App = () => (
               <ProtectedRoute>
                 <RoleGuard allowedRoles={["sales_staff", "admin_boutique"]}>
                   <MyExpenses />
+                </RoleGuard>
+              </ProtectedRoute>
+            } />
+            <Route path="/staff-expenses" element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["super_admin"]}>
+                  <StaffExpenses />
                 </RoleGuard>
               </ProtectedRoute>
             } />
