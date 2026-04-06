@@ -14,6 +14,8 @@ import {
   Activity,
   UserRound,
   TrendingUp,
+  Wallet,
+  Trash2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -54,7 +56,9 @@ const navItems: NavItem[] = [
   { title: "Bénéfice Net", url: "/net-profit", icon: TrendingUp, allowedRoles: ["super_admin"] },
   { title: "Rapports", url: "/reports", icon: BarChart3 },
   { title: "Utilisateurs", url: "/users", icon: Users, allowedRoles: ["super_admin"] },
+  { title: "Mes Dépenses", url: "/my-expenses", icon: Wallet, allowedRoles: ["sales_staff", "admin_boutique"] },
   { title: "Activités", url: "/activity", icon: Activity, allowedRoles: ["super_admin"] },
+  { title: "Corbeille", url: "/trash", icon: Trash2, allowedRoles: ["super_admin"] },
   { title: "Paramètres", url: "/settings", icon: Settings, allowedRoles: ["super_admin"] },
   { title: "Mon Profil", url: "/profile", icon: User },
 ];
