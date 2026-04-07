@@ -188,6 +188,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          acquisition_channel: string | null
           age_range: string | null
           boutique_id: string | null
           country_id: string | null
@@ -206,6 +207,7 @@ export type Database = {
           visit_count: number
         }
         Insert: {
+          acquisition_channel?: string | null
           age_range?: string | null
           boutique_id?: string | null
           country_id?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           visit_count?: number
         }
         Update: {
+          acquisition_channel?: string | null
           age_range?: string | null
           boutique_id?: string | null
           country_id?: string | null
