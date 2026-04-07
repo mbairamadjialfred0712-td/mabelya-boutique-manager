@@ -8,6 +8,7 @@ import { CountryFilter } from "@/components/dashboard/CountryFilter";
 import { FeatureCards } from "@/components/dashboard/FeatureCards";
 import { StatCards } from "@/components/dashboard/StatCards";
 import { TopProductsChart, RevenueByCountryChart } from "@/components/dashboard/DashboardCharts";
+import { AcquisitionChannelChart } from "@/components/dashboard/AcquisitionChannelChart";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -289,6 +290,8 @@ export default function Dashboard() {
         <TopProductsChart topProducts={topProducts ?? []} />
         <RevenueByCountryChart data={revenueByCountry ?? []} />
       </div>
+
+      <AcquisitionChannelChart />
 
       {/* Stock Général */}
       <StockSummarySection
