@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN acquisition_channel text DEFAULT NULL;
