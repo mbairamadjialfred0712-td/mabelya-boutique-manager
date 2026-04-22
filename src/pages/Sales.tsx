@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +30,7 @@ export default function Sales() {
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, userBoutiqueId } = useAuth();
 
   const isSuperAdmin = hasRole("super_admin");
   const isAdminBoutique = hasRole("admin_boutique");
@@ -65,13 +65,20 @@ export default function Sales() {
   });
 
   const { data: products } = useQuery({
-    queryKey: ["products-for-sale"],
+    queryKey: ["products-for-sale", userBoutiqueId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("products")
         .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name)")
         .gt("stock_quantity", 0)
         .order("name");
+
+      // Vendeur et admin_boutique ne voient que les produits de leur boutique
+      if (!isSuperAdmin && userBoutiqueId) {
+        query = query.eq("boutique_id", userBoutiqueId);
+      }
+
+      const { data, error } = await query;
       if (error) return [];
       return data ?? [];
     },
@@ -245,7 +252,11 @@ export default function Sales() {
               </DialogHeader>
               <NewSaleForm
                 products={products ?? []}
-                boutiques={boutiques ?? []}
+                boutiques={
+                  isSuperAdmin || isAdminBoutique
+                    ? (boutiques ?? [])
+                    : (boutiques ?? []).filter((b) => b.id === userBoutiqueId)
+                }
                 onSubmit={(data) => createSale.mutate(data)}
                 loading={createSale.isPending}
               />
@@ -401,6 +412,13 @@ function NewSaleForm({
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
 
+  // Auto-sélectionner la boutique si une seule disponible
+  useEffect(() => {
+    if (boutiques.length === 1 && !boutiqueId) {
+      setBoutiqueId(boutiques[0].id);
+    }
+  }, [boutiques]);
+
   const getPrice = (product: any): number => {
     const price = Number(product.selling_price ?? product.purchase_price ?? 0);
     return isNaN(price) ? 0 : price;
@@ -454,12 +472,15 @@ function NewSaleForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Boutique *</Label>
-          <Select value={boutiqueId} onValueChange={setBoutiqueId}>
+          <Select value={boutiqueId} onValueChange={setBoutiqueId} disabled={boutiques.length === 1}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
             <SelectContent>
               {boutiques.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          {boutiques.length === 1 && (
+            <p className="text-xs text-muted-foreground">Boutique assignée automatiquement</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Paiement *</Label>

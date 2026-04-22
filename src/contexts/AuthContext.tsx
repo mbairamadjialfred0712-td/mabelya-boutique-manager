@@ -17,6 +17,7 @@ interface AuthContextType {
   roles: AppRole[];
   profile: Profile | null;
   loading: boolean;
+  userBoutiqueId: string | null;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userBoutiqueId, setUserBoutiqueId] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setRoles([]);
         setProfile(null);
+        setUserBoutiqueId(null);
         setLoading(false);
       }
     });
@@ -73,15 +76,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function fetchUserData(userId: string) {
-    const [rolesRes, profileRes] = await Promise.all([
+    const [rolesRes, profileRes, staffRes] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
       supabase.from("profiles")
         .select("full_name, avatar_url, phone")
         .eq("user_id", userId)
         .single() as any as Promise<{ data: Profile | null; error: any }>,
+      supabase.from("staff")
+        .select("boutique_id")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .maybeSingle(),
     ]);
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
+    setUserBoutiqueId(staffRes.data?.boutique_id ?? null);
     setLoading(false);
   }
 
@@ -105,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, roles, profile, loading,
+      userBoutiqueId,
       signOut, hasRole, refreshProfile
     }}>
       {children}
