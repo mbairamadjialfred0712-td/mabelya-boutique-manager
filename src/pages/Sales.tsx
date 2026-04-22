@@ -30,7 +30,7 @@ export default function Sales() {
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
-  const { user, hasRole, userBoutiqueId } = useAuth();
+  const { user, hasRole, userBoutiqueId, userCountryId } = useAuth();
 
   const isSuperAdmin = hasRole("super_admin");
   const isAdminBoutique = hasRole("admin_boutique");
@@ -65,21 +65,32 @@ export default function Sales() {
   });
 
   const { data: products } = useQuery({
-    queryKey: ["products-for-sale", userBoutiqueId],
+    queryKey: ["products-for-sale", userBoutiqueId, userCountryId],
     queryFn: async () => {
       let query = supabase
         .from("products")
-        .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name)")
+        .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name, country_id)")
         .gt("stock_quantity", 0)
         .order("name");
 
-      // Vendeur et admin_boutique ne voient que les produits de leur boutique
-      if (!isSuperAdmin && userBoutiqueId) {
+      if (isSuperAdmin) {
+        // super_admin voit tous les produits
+      } else if (isAdminBoutique && userCountryId) {
+        // admin_boutique voit tous les produits de son pays
+        query = query.eq("boutiques.country_id", userCountryId);
+      } else if (userBoutiqueId) {
+        // vendeur voit uniquement les produits de sa boutique
         query = query.eq("boutique_id", userBoutiqueId);
       }
 
       const { data, error } = await query;
       if (error) return [];
+
+      // Filtre côté client pour admin_boutique (le join filter ne fonctionne pas toujours côté Supabase)
+      if (!isSuperAdmin && isAdminBoutique && userCountryId) {
+        return (data ?? []).filter((p: any) => p.boutiques?.country_id === userCountryId);
+      }
+
       return data ?? [];
     },
   });
@@ -253,8 +264,10 @@ export default function Sales() {
               <NewSaleForm
                 products={products ?? []}
                 boutiques={
-                  isSuperAdmin || isAdminBoutique
+                  isSuperAdmin
                     ? (boutiques ?? [])
+                    : isAdminBoutique && userCountryId
+                    ? (boutiques ?? []).filter((b: any) => b.country_id === userCountryId)
                     : (boutiques ?? []).filter((b) => b.id === userBoutiqueId)
                 }
                 onSubmit={(data) => createSale.mutate(data)}

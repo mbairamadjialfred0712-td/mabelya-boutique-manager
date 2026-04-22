@@ -18,6 +18,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   userBoutiqueId: string | null;
+  userCountryId: string | null;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [userBoutiqueId, setUserBoutiqueId] = useState<string | null>(null);
+  const [userCountryId, setUserCountryId] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRoles([]);
         setProfile(null);
         setUserBoutiqueId(null);
+        setUserCountryId(null);
         setLoading(false);
       }
     });
@@ -83,14 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .single() as any as Promise<{ data: Profile | null; error: any }>,
       supabase.from("staff")
-        .select("boutique_id")
+        .select("boutique_id, country_id")
         .eq("user_id", userId)
         .eq("is_active", true)
         .maybeSingle(),
     ]);
+
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
     setUserBoutiqueId(staffRes.data?.boutique_id ?? null);
+    setUserCountryId(staffRes.data?.country_id ?? null);
     setLoading(false);
   }
 
@@ -115,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       session, user, roles, profile, loading,
       userBoutiqueId,
+      userCountryId,
       signOut, hasRole, refreshProfile
     }}>
       {children}
