@@ -98,7 +98,21 @@ export default function Stock() {
     },
   });
 
-  const { data: boutiques } = useQuery({
+  const { data: soldStock } = useQuery({
+    queryKey: ["sold-stock"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("product_id, quantity");
+      if (error) return {} as Record<string, number>;
+      // Agréger les quantités vendues par product_id
+      const totals: Record<string, number> = {};
+      for (const item of data ?? []) {
+        totals[item.product_id] = (totals[item.product_id] ?? 0) + item.quantity;
+      }
+      return totals;
+    },
+  });
     queryKey: ["boutiques"],
     queryFn: async () => {
       const { data } = await supabase.from("boutiques").select("*, countries(name)").order("name");
@@ -171,6 +185,8 @@ export default function Stock() {
       (p.categories as any)?.name ?? "—",
       formatCurrency(Number(p.selling_price)),
       p.stock_quantity,
+      soldStock?.[p.id] ?? 0,
+      p.stock_quantity - (soldStock?.[p.id] ?? 0),
       (p.boutiques as any)?.name ?? "—",
       (p.boutiques as any)?.countries?.name ?? "—",
       new Date(p.created_at).toLocaleDateString("fr-FR"),
@@ -178,7 +194,7 @@ export default function Stock() {
     ]);
     (doc as any).autoTable({
       startY: 36,
-      head: [["Produit", "Catégorie", "Prix", "Stock", "Boutique", "Pays", "Créé le", "Statut"]],
+      head: [["Produit", "Catégorie", "Prix", "Stock initial", "Stock vendu", "Stock restant", "Boutique", "Pays", "Créé le", "Statut"]],
       body: rows,
       styles: { fontSize: 7 },
       headStyles: { fillColor: [200, 50, 80] },
@@ -285,7 +301,9 @@ export default function Stock() {
                 <TableHead>Produit</TableHead>
                 <TableHead className="hidden md:table-cell">Catégorie</TableHead>
                 <TableHead className="text-right">Prix</TableHead>
-                <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="text-right">Stock initial</TableHead>
+                <TableHead className="text-right">Stock vendu</TableHead>
+                <TableHead className="text-right">Stock restant</TableHead>
                 <TableHead className="hidden lg:table-cell">Boutique</TableHead>
                 <TableHead className="hidden lg:table-cell">Pays</TableHead>
                 {canManage && <TableHead className="hidden xl:table-cell">Créé le</TableHead>}
@@ -296,7 +314,7 @@ export default function Stock() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 9 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canManage ? 11 : 9} className="text-center py-8 text-muted-foreground">
                     Chargement...
                   </TableCell>
                 </TableRow>
@@ -328,9 +346,30 @@ export default function Stock() {
                       {formatCurrency(Number(p.selling_price))}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"}>
+                      <Badge variant="outline" className="font-mono">
                         {p.stock_quantity}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(() => {
+                        const vendu = soldStock?.[p.id] ?? 0;
+                        return (
+                          <Badge variant={vendu > 0 ? "secondary" : "outline"} className="font-mono">
+                            {vendu}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(() => {
+                        const vendu = soldStock?.[p.id] ?? 0;
+                        const restant = p.stock_quantity - vendu;
+                        return (
+                          <Badge variant={restant < 5 ? "destructive" : "secondary"} className="font-mono">
+                            {restant}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">
                       {(p.boutiques as any)?.name}
@@ -399,7 +438,7 @@ export default function Stock() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 9 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canManage ? 11 : 9} className="text-center py-8 text-muted-foreground">
                     {isVendeur
                       ? "Aucun produit disponible en stock"
                       : showArchived
