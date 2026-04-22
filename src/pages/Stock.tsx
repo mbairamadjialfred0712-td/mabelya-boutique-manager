@@ -105,7 +105,6 @@ export default function Stock() {
         .from("sale_items")
         .select("product_id, quantity");
       if (error) return {} as Record<string, number>;
-      // Agréger les quantités vendues par product_id
       const totals: Record<string, number> = {};
       for (const item of data ?? []) {
         totals[item.product_id] = (totals[item.product_id] ?? 0) + item.quantity;
@@ -113,6 +112,8 @@ export default function Stock() {
       return totals;
     },
   });
+
+  const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
     queryFn: async () => {
       const { data } = await supabase.from("boutiques").select("*, countries(name)").order("name");
