@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore, TrendingUp, Crown, UserPlus, Filter, Globe, Megaphone } from "lucide-react";
+import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore, TrendingUp, Crown, UserPlus, Filter, Globe, Megaphone, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
