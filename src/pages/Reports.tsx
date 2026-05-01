@@ -229,9 +229,14 @@ export default function Reports() {
             {isVendeur ? "Votre activité personnelle" : "Analyse détaillée par produit, boutique, pays et vendeur"}
           </p>
         </div>
-        <Button onClick={exportPDF} variant="outline" size="sm">
-          <Download className="h-4 w-4 mr-2" /> Exporter PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={exportPDF} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
+          <Button onClick={exportReportCSV} variant="outline" size="sm">
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> CSV
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}
