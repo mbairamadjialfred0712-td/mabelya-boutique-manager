@@ -99,20 +99,6 @@ export default function Stock() {
     },
   });
 
-  const { data: soldStock } = useQuery({
-    queryKey: ["sold-stock"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sale_items")
-        .select("product_id, quantity");
-      if (error) return {} as Record<string, number>;
-      const totals: Record<string, number> = {};
-      for (const item of data ?? []) {
-        totals[item.product_id] = (totals[item.product_id] ?? 0) + item.quantity;
-      }
-      return totals;
-    },
-  });
 
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
