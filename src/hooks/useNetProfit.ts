@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type PeriodKey = "week" | "month" | "quarter" | "60days" | "90days" | "year" | "all";
+export type PeriodKey = "day" | "week" | "month" | "quarter" | "60days" | "90days" | "year" | "all";
 
 export interface ProfitRow {
   label: string;
@@ -28,6 +28,7 @@ function getDateFrom(period: PeriodKey): string | null {
   const now = new Date();
   const d = new Date();
   switch (period) {
+    case "day": d.setDate(now.getDate() - 1); break;
     case "week": d.setDate(now.getDate() - 7); break;
     case "month": d.setMonth(now.getMonth() - 1); break;
     case "quarter": d.setMonth(now.getMonth() - 3); break;
