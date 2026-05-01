@@ -208,6 +208,16 @@ export default function Stock() {
     doc.save("stock-mabelya.pdf");
   };
 
+  const exportStockCSV = () => {
+    const headers = ["Produit", "Catégorie", "Prix", "Stock initial", "Stock vendu", "Stock restant", "Boutique", "Pays"];
+    const rows = (filtered ?? []).map((p) => {
+      const initial = (p as any).stock_initial || p.stock_quantity;
+      const vendu = initial - p.stock_quantity;
+      return [p.name, (p.categories as any)?.name, formatCurrency(Number(p.selling_price)), initial, vendu, p.stock_quantity, (p.boutiques as any)?.name, (p.boutiques as any)?.countries?.name];
+    });
+    exportCSV("stock-mabelya.csv", headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
