@@ -204,6 +204,15 @@ export default function Clients() {
     doc.save("clients-mabelya.pdf");
   };
 
+  const exportClientCSV = () => {
+    const headers = ["Nom", "Téléphone", "Pays", "Sexe", "Âge", "Canal", "Statut", "Dépenses"];
+    const rows = (filtered ?? []).map((c) => [
+      c.full_name, c.phone, (c.countries as any)?.name, c.gender, c.age_range,
+      (c as any).acquisition_channel, c.status, Number(c.total_spent),
+    ]);
+    exportCSV("clients-mabelya.csv", headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
