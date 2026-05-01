@@ -348,12 +348,13 @@ export default function Stock() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="outline" className="font-mono">
-                        {p.stock_quantity}
+                        {(p as any).stock_initial || p.stock_quantity}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {(() => {
-                        const vendu = soldStock?.[p.id] ?? 0;
+                        const initial = (p as any).stock_initial || p.stock_quantity;
+                        const vendu = initial - p.stock_quantity;
                         return (
                           <Badge variant={vendu > 0 ? "secondary" : "outline"} className="font-mono">
                             {vendu}
@@ -363,11 +364,9 @@ export default function Stock() {
                     </TableCell>
                     <TableCell className="text-right">
                       {(() => {
-                        const vendu = soldStock?.[p.id] ?? 0;
-                        const restant = p.stock_quantity - vendu;
                         return (
-                          <Badge variant={restant < 5 ? "destructive" : "secondary"} className="font-mono">
-                            {restant}
+                          <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"} className="font-mono">
+                            {p.stock_quantity}
                           </Badge>
                         );
                       })()}
