@@ -376,11 +376,41 @@ export default function Reports() {
         </Card>
       )}
 
-      {/* Top produits */}
+      {/* Top produits with period shortcuts */}
       <Card>
-        <CardHeader><CardTitle className="text-base font-display">
-          {isVendeur ? "Mes top produits vendus" : "Top produits"}
-        </CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-base font-display">
+              {isVendeur ? "Mes top produits vendus" : "Top produits"}
+            </CardTitle>
+            <div className="flex gap-1.5 flex-wrap">
+              {[
+                { label: "Mensuel", days: 30 },
+                { label: "Trimestriel", days: 90 },
+                { label: "Annuel", days: 365 },
+              ].map(({ label, days }) => {
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - days);
+                const cutoffStr = cutoff.toISOString().split("T")[0];
+                const isActive = dateFrom === cutoffStr;
+                return (
+                  <Button
+                    key={label}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs h-7 px-3"
+                    onClick={() => {
+                      setDateFrom(cutoffStr);
+                      setDateTo(new Date().toISOString().split("T")[0]);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
