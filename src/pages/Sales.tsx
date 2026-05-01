@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, ShoppingCart, Trash2, Download, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Download, Archive, ArchiveRestore, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
@@ -224,6 +225,16 @@ export default function Sales() {
     doc.save(isVendeur ? "mes-ventes-mabelya.pdf" : "ventes-mabelya.pdf");
   };
 
+  const exportSalesCSV = () => {
+    const headers = ["Facture", "Boutique", "Client", "Paiement", "Montant", "Date"];
+    const rows = (filtered ?? []).map((s) => [
+      s.invoice_number, (s.boutiques as any)?.name, s.customer_name,
+      s.payment_method === "cash" ? "Espèces" : s.payment_method === "mobile_money" ? "Mobile Money" : "Virement",
+      Number(s.total_amount), new Date(s.created_at).toLocaleDateString("fr-FR"),
+    ]);
+    exportCSV(isVendeur ? "mes-ventes-mabelya.csv" : "ventes-mabelya.csv", headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -238,6 +249,9 @@ export default function Sales() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportSalesCSV}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> CSV
           </Button>
           {(isSuperAdmin || isAdminBoutique) && (
             <Button

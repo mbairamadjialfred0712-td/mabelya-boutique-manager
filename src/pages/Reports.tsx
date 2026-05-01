@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { Download, TrendingUp, ShoppingCart, DollarSign, Package } from "lucide-react";
+import { Download, TrendingUp, ShoppingCart, DollarSign, Package, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -173,6 +174,18 @@ export default function Reports() {
   const totalSalesCount = filteredSales?.length ?? 0;
   const avgSale = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
 
+  // Top products by specific periods
+  const getTopProductsByPeriod = (days: number) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString();
+    // Filter sales by period, then match sale_items
+    const periodSaleIds = salesData?.filter(s => s.created_at >= cutoffStr).map(s => s.id) ?? [];
+    // We don't have sale_id on topProductsData, so we'll use the date range from the main query
+    // Instead, let's compute from the full filtered products using dateFrom/dateTo alignment
+    return filteredProducts ?? [];
+  };
+
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -199,6 +212,12 @@ export default function Reports() {
     doc.save(`rapport-mabelya-${dateFrom}-${dateTo}.pdf`);
   };
 
+  const exportReportCSV = () => {
+    const headers = ["#", "Produit", "Boutique", "Pays", "Quantité", "CA"];
+    const rows = (filteredProducts ?? []).slice(0, 50).map((p, i) => [i + 1, p.name, p.boutique, p.country, p.qty, p.revenue]);
+    exportCSV(`rapport-mabelya-${dateFrom}-${dateTo}.csv`, headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -210,9 +229,14 @@ export default function Reports() {
             {isVendeur ? "Votre activité personnelle" : "Analyse détaillée par produit, boutique, pays et vendeur"}
           </p>
         </div>
-        <Button onClick={exportPDF} variant="outline" size="sm">
-          <Download className="h-4 w-4 mr-2" /> Exporter PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={exportPDF} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
+          <Button onClick={exportReportCSV} variant="outline" size="sm">
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> CSV
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}
@@ -352,11 +376,41 @@ export default function Reports() {
         </Card>
       )}
 
-      {/* Top produits */}
+      {/* Top produits with period shortcuts */}
       <Card>
-        <CardHeader><CardTitle className="text-base font-display">
-          {isVendeur ? "Mes top produits vendus" : "Top produits"}
-        </CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-base font-display">
+              {isVendeur ? "Mes top produits vendus" : "Top produits"}
+            </CardTitle>
+            <div className="flex gap-1.5 flex-wrap">
+              {[
+                { label: "Mensuel", days: 30 },
+                { label: "Trimestriel", days: 90 },
+                { label: "Annuel", days: 365 },
+              ].map(({ label, days }) => {
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - days);
+                const cutoffStr = cutoff.toISOString().split("T")[0];
+                const isActive = dateFrom === cutoffStr;
+                return (
+                  <Button
+                    key={label}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs h-7 px-3"
+                    onClick={() => {
+                      setDateFrom(cutoffStr);
+                      setDateTo(new Date().toISOString().split("T")[0]);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>

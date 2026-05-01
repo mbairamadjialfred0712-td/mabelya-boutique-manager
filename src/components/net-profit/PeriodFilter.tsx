@@ -3,6 +3,7 @@ import { CalendarDays } from "lucide-react";
 import type { PeriodKey } from "@/hooks/useNetProfit";
 
 const PERIODS: { value: PeriodKey; label: string }[] = [
+  { value: "day", label: "Journalier" },
   { value: "week", label: "7 jours" },
   { value: "month", label: "30 jours" },
   { value: "quarter", label: "Trimestriel" },

@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, Pencil, Archive, ArchiveRestore, Download } from "lucide-react";
+import { Plus, Package, Search, Pencil, Archive, ArchiveRestore, Download, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import { AddProductForm } from "@/components/stock/AddProductForm";
@@ -98,20 +99,6 @@ export default function Stock() {
     },
   });
 
-  const { data: soldStock } = useQuery({
-    queryKey: ["sold-stock"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sale_items")
-        .select("product_id, quantity");
-      if (error) return {} as Record<string, number>;
-      const totals: Record<string, number> = {};
-      for (const item of data ?? []) {
-        totals[item.product_id] = (totals[item.product_id] ?? 0) + item.quantity;
-      }
-      return totals;
-    },
-  });
 
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
@@ -181,18 +168,22 @@ export default function Stock() {
     doc.text(`${showArchived ? "Produits archivés" : "Gestion du Stock"} — Mabelya`, 14, 22);
     doc.setFontSize(10);
     doc.text(`${filtered?.length ?? 0} produits — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
-    const rows = (filtered ?? []).map((p) => [
-      p.name,
-      (p.categories as any)?.name ?? "—",
-      formatCurrency(Number(p.selling_price)),
-      p.stock_quantity,
-      soldStock?.[p.id] ?? 0,
-      p.stock_quantity - (soldStock?.[p.id] ?? 0),
-      (p.boutiques as any)?.name ?? "—",
-      (p.boutiques as any)?.countries?.name ?? "—",
-      new Date(p.created_at).toLocaleDateString("fr-FR"),
-      p.stock_quantity > 0 ? "En stock" : "Rupture",
-    ]);
+    const rows = (filtered ?? []).map((p) => {
+      const initial = (p as any).stock_initial || p.stock_quantity;
+      const vendu = initial - p.stock_quantity;
+      return [
+        p.name,
+        (p.categories as any)?.name ?? "—",
+        formatCurrency(Number(p.selling_price)),
+        initial,
+        vendu,
+        p.stock_quantity,
+        (p.boutiques as any)?.name ?? "—",
+        (p.boutiques as any)?.countries?.name ?? "—",
+        new Date(p.created_at).toLocaleDateString("fr-FR"),
+        p.stock_quantity > 0 ? "En stock" : "Rupture",
+      ];
+    });
     (doc as any).autoTable({
       startY: 36,
       head: [["Produit", "Catégorie", "Prix", "Stock initial", "Stock vendu", "Stock restant", "Boutique", "Pays", "Créé le", "Statut"]],
@@ -201,6 +192,16 @@ export default function Stock() {
       headStyles: { fillColor: [200, 50, 80] },
     });
     doc.save("stock-mabelya.pdf");
+  };
+
+  const exportStockCSV = () => {
+    const headers = ["Produit", "Catégorie", "Prix", "Stock initial", "Stock vendu", "Stock restant", "Boutique", "Pays"];
+    const rows = (filtered ?? []).map((p) => {
+      const initial = (p as any).stock_initial || p.stock_quantity;
+      const vendu = initial - p.stock_quantity;
+      return [p.name, (p.categories as any)?.name, formatCurrency(Number(p.selling_price)), initial, vendu, p.stock_quantity, (p.boutiques as any)?.name, (p.boutiques as any)?.countries?.name];
+    });
+    exportCSV("stock-mabelya.csv", headers, rows);
   };
 
   return (
@@ -219,6 +220,9 @@ export default function Stock() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={exportPDF}>
             <Download className="h-4 w-4 mr-2" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportStockCSV}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> CSV
           </Button>
           {/* Bouton basculer archivés — uniquement pour admin */}
           {canManage && (
@@ -348,12 +352,13 @@ export default function Stock() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="outline" className="font-mono">
-                        {p.stock_quantity}
+                        {(p as any).stock_initial || p.stock_quantity}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {(() => {
-                        const vendu = soldStock?.[p.id] ?? 0;
+                        const initial = (p as any).stock_initial || p.stock_quantity;
+                        const vendu = initial - p.stock_quantity;
                         return (
                           <Badge variant={vendu > 0 ? "secondary" : "outline"} className="font-mono">
                             {vendu}
@@ -363,11 +368,9 @@ export default function Stock() {
                     </TableCell>
                     <TableCell className="text-right">
                       {(() => {
-                        const vendu = soldStock?.[p.id] ?? 0;
-                        const restant = p.stock_quantity - vendu;
                         return (
-                          <Badge variant={restant < 5 ? "destructive" : "secondary"} className="font-mono">
-                            {restant}
+                          <Badge variant={p.stock_quantity < 5 ? "destructive" : "secondary"} className="font-mono">
+                            {p.stock_quantity}
                           </Badge>
                         );
                       })()}

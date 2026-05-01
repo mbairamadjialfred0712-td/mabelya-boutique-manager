@@ -340,6 +340,7 @@ export type Database = {
           purchase_price: number
           selling_price: number
           size: string | null
+          stock_initial: number
           stock_quantity: number
           updated_at: string
         }
@@ -356,6 +357,7 @@ export type Database = {
           purchase_price?: number
           selling_price?: number
           size?: string | null
+          stock_initial?: number
           stock_quantity?: number
           updated_at?: string
         }
@@ -372,6 +374,7 @@ export type Database = {
           purchase_price?: number
           selling_price?: number
           size?: string | null
+          stock_initial?: number
           stock_quantity?: number
           updated_at?: string
         }

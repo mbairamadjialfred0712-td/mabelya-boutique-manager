@@ -25,11 +25,13 @@ export function AddProductForm({ categories, boutiques, onSubmit, loading }: Add
       toast.error("Veuillez remplir les champs obligatoires");
       return;
     }
+    const qty = Number(form.stock_quantity) || 0;
     onSubmit({
       ...form,
       purchase_price: Number(form.purchase_price) || 0,
       selling_price: Number(form.selling_price),
-      stock_quantity: Number(form.stock_quantity) || 0,
+      stock_quantity: qty,
+      stock_initial: qty,
       category_id: form.category_id || null,
       image_url: form.image_url || null,
     });

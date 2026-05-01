@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Receipt, Download } from "lucide-react";
+import { Plus, Receipt, Download, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
@@ -93,6 +94,16 @@ export default function Expenses() {
     doc.save("depenses-mabelya.pdf");
   };
 
+  const exportExpenseCSV = () => {
+    const headers = ["Date", "Boutique", "Pays", "Catégorie", "Description", "Montant"];
+    const rows = (filtered ?? []).map((e) => [
+      new Date(e.expense_date).toLocaleDateString("fr-FR"),
+      (e.boutiques as any)?.name, (e.boutiques as any)?.countries?.name,
+      e.category, e.description, Number(e.amount),
+    ]);
+    exportCSV("depenses-mabelya.csv", headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -102,6 +113,7 @@ export default function Expenses() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportPDF}><Download className="h-4 w-4 mr-2" /> PDF</Button>
+          <Button variant="outline" size="sm" onClick={exportExpenseCSV}><FileSpreadsheet className="h-4 w-4 mr-2" /> CSV</Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-2" />Nouvelle dépense</Button>

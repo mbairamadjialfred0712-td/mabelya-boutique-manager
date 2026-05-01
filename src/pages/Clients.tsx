@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore, TrendingUp, Crown, UserPlus, Filter, Globe, Megaphone } from "lucide-react";
+import { Plus, Search, Users, Download, Phone, Mail, Trash2, Archive, ArchiveRestore, TrendingUp, Crown, UserPlus, Filter, Globe, Megaphone, FileSpreadsheet } from "lucide-react";
+import { exportCSV } from "@/lib/exportCSV";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/constants";
 import jsPDF from "jspdf";
@@ -203,6 +204,15 @@ export default function Clients() {
     doc.save("clients-mabelya.pdf");
   };
 
+  const exportClientCSV = () => {
+    const headers = ["Nom", "Téléphone", "Pays", "Sexe", "Âge", "Canal", "Statut", "Dépenses"];
+    const rows = (filtered ?? []).map((c) => [
+      c.full_name, c.phone, (c.countries as any)?.name, c.gender, c.age_range,
+      (c as any).acquisition_channel, c.status, Number(c.total_spent),
+    ]);
+    exportCSV("clients-mabelya.csv", headers, rows);
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
@@ -221,7 +231,10 @@ export default function Clients() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportPDF} size="sm" className="gap-2">
-            <Download className="h-4 w-4" /> Exporter PDF
+            <Download className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" onClick={exportClientCSV} size="sm" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" /> CSV
           </Button>
           {(isSuperAdmin || isAdminBoutique) && (
             <Button
