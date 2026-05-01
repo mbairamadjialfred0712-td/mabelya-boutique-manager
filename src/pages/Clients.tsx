@@ -231,7 +231,10 @@ export default function Clients() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportPDF} size="sm" className="gap-2">
-            <Download className="h-4 w-4" /> Exporter PDF
+            <Download className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" onClick={exportClientCSV} size="sm" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" /> CSV
           </Button>
           {(isSuperAdmin || isAdminBoutique) && (
             <Button
