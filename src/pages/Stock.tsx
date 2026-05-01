@@ -181,18 +181,22 @@ export default function Stock() {
     doc.text(`${showArchived ? "Produits archivés" : "Gestion du Stock"} — Mabelya`, 14, 22);
     doc.setFontSize(10);
     doc.text(`${filtered?.length ?? 0} produits — ${new Date().toLocaleDateString("fr-FR")}`, 14, 30);
-    const rows = (filtered ?? []).map((p) => [
-      p.name,
-      (p.categories as any)?.name ?? "—",
-      formatCurrency(Number(p.selling_price)),
-      p.stock_quantity,
-      soldStock?.[p.id] ?? 0,
-      p.stock_quantity - (soldStock?.[p.id] ?? 0),
-      (p.boutiques as any)?.name ?? "—",
-      (p.boutiques as any)?.countries?.name ?? "—",
-      new Date(p.created_at).toLocaleDateString("fr-FR"),
-      p.stock_quantity > 0 ? "En stock" : "Rupture",
-    ]);
+    const rows = (filtered ?? []).map((p) => {
+      const initial = (p as any).stock_initial || p.stock_quantity;
+      const vendu = initial - p.stock_quantity;
+      return [
+        p.name,
+        (p.categories as any)?.name ?? "—",
+        formatCurrency(Number(p.selling_price)),
+        initial,
+        vendu,
+        p.stock_quantity,
+        (p.boutiques as any)?.name ?? "—",
+        (p.boutiques as any)?.countries?.name ?? "—",
+        new Date(p.created_at).toLocaleDateString("fr-FR"),
+        p.stock_quantity > 0 ? "En stock" : "Rupture",
+      ];
+    });
     (doc as any).autoTable({
       startY: 36,
       head: [["Produit", "Catégorie", "Prix", "Stock initial", "Stock vendu", "Stock restant", "Boutique", "Pays", "Créé le", "Statut"]],
