@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,6 +98,17 @@ export default function Stock() {
       return data ?? [];
     },
   });
+
+  // Realtime: auto-refresh quand un produit est modifié/archivé/supprimé
+  useEffect(() => {
+    const channel = supabase
+      .channel("products-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
 
   const { data: boutiques } = useQuery({
