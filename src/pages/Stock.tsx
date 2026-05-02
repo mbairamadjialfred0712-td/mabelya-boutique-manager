@@ -99,6 +99,17 @@ export default function Stock() {
     },
   });
 
+  // Realtime: auto-refresh quand un produit est modifié/archivé/supprimé
+  useEffect(() => {
+    const channel = supabase
+      .channel("products-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+
 
   const { data: boutiques } = useQuery({
     queryKey: ["boutiques"],
