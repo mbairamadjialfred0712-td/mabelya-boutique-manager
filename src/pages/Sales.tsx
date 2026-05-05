@@ -31,7 +31,7 @@ export default function Sales() {
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
-  const { user, hasRole, userBoutiqueId, userCountryId } = useAuth();
+  const { user, hasRole, userBoutiqueId, userCountryId, loading: authLoading } = useAuth();
 
   const isSuperAdmin = hasRole("super_admin");
   const isAdminBoutique = hasRole("admin_boutique");
@@ -96,6 +96,7 @@ export default function Sales() {
 
       return data ?? [];
     },
+    enabled: !authLoading && (isSuperAdmin || (isAdminBoutique && !!userCountryId) || !!userBoutiqueId),
   });
 
   const { data: boutiques } = useQuery({
