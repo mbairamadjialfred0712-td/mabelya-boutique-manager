@@ -149,11 +149,19 @@ export default function Stock() {
   // Archiver un produit (au lieu de supprimer)
   const archiveProduct = useMutation({
     mutationFn: async ({ id, archive }: { id: string; archive: boolean }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("products")
-        .update({ is_archived: archive, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({ 
+          is_archived: archive, 
+          is_active: !archive,
+          updated_at: new Date().toISOString() 
+        })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Impossible de modifier ce produit. Vérifiez vos permissions.");
+      }
     },
     onSuccess: (_, { archive }) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
