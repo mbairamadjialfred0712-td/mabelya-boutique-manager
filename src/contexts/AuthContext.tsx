@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from("profiles")
       .select("full_name, avatar_url, phone")
       .eq("user_id", user.id)
-      .single() as any as Promise<{ data: Profile | null; error: any }>);
+      .single() as unknown as Promise<{ data: Profile | null; error: unknown }>);
     if (data) setProfile(data);
   };
 
