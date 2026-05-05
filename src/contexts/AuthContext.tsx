@@ -87,15 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchUserData(userId: string) {
     const [rolesRes, profileRes, staffRes] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("profiles")
+      (supabase.from("profiles")
         .select("full_name, avatar_url, phone")
         .eq("user_id", userId)
-        .single() as any as Promise<{ data: Profile | null; error: any }>,
-      supabase.from("staff")
+        .single() as unknown as Promise<{ data: Profile | null; error: unknown }>),
+      (supabase.from("staff")
         .select("boutique_id, country_id, boutiques(country_id)")
         .eq("user_id", userId)
         .eq("is_active", true)
-        .maybeSingle() as Promise<{ data: StaffAssignment | null; error: unknown }>,
+        .maybeSingle() as unknown as Promise<{ data: StaffAssignment | null; error: unknown }>),
     ]);
 
     setRoles((rolesRes.data ?? []).map((r) => r.role));
