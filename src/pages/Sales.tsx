@@ -121,9 +121,12 @@ export default function Sales() {
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
-          .select("stock_quantity, name")
+          .select("stock_quantity, name, is_archived, is_active, boutique_id")
           .eq("id", item.product_id)
           .single();
+        if (!product || product.is_archived || !product.is_active || product.boutique_id !== saleData.boutique_id) {
+          throw new Error(`"${product?.name ?? item.product_id}" n'est plus disponible pour cette boutique`);
+        }
         if (!product || product.stock_quantity < item.quantity) {
           throw new Error(`Stock insuffisant pour "${product?.name ?? item.product_id}" — seulement ${product?.stock_quantity ?? 0} disponible(s)`);
         }
