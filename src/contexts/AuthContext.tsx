@@ -11,6 +11,12 @@ interface Profile {
   phone: string | null;
 }
 
+interface StaffAssignment {
+  boutique_id: string | null;
+  country_id: string | null;
+  boutiques: { country_id: string | null } | null;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -89,13 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select("boutique_id, country_id, boutiques(country_id)")
         .eq("user_id", userId)
         .eq("is_active", true)
-        .maybeSingle(),
+        .maybeSingle() as Promise<{ data: StaffAssignment | null; error: unknown }>,
     ]);
 
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
     setUserBoutiqueId(staffRes.data?.boutique_id ?? null);
-    setUserCountryId(staffRes.data?.country_id ?? (staffRes.data?.boutiques as any)?.country_id ?? null);
+    setUserCountryId(staffRes.data?.country_id ?? staffRes.data?.boutiques?.country_id ?? null);
     setLoading(false);
   }
 
