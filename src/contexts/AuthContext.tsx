@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .single() as any as Promise<{ data: Profile | null; error: any }>,
       supabase.from("staff")
-        .select("boutique_id, country_id")
+        .select("boutique_id, country_id, boutiques(country_id)")
         .eq("user_id", userId)
         .eq("is_active", true)
         .maybeSingle(),
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
     setUserBoutiqueId(staffRes.data?.boutique_id ?? null);
-    setUserCountryId(staffRes.data?.country_id ?? null);
+    setUserCountryId(staffRes.data?.country_id ?? (staffRes.data?.boutiques as any)?.country_id ?? null);
     setLoading(false);
   }
 
