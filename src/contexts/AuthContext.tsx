@@ -11,6 +11,12 @@ interface Profile {
   phone: string | null;
 }
 
+interface StaffAssignment {
+  boutique_id: string | null;
+  country_id: string | null;
+  boutiques: { country_id: string | null } | null;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -81,21 +87,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchUserData(userId: string) {
     const [rolesRes, profileRes, staffRes] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("profiles")
+      (supabase.from("profiles")
         .select("full_name, avatar_url, phone")
         .eq("user_id", userId)
-        .single() as any as Promise<{ data: Profile | null; error: any }>,
-      supabase.from("staff")
-        .select("boutique_id, country_id")
+        .single() as unknown as Promise<{ data: Profile | null; error: unknown }>),
+      (supabase.from("staff")
+        .select("boutique_id, country_id, boutiques(country_id)")
         .eq("user_id", userId)
         .eq("is_active", true)
-        .maybeSingle(),
+        .maybeSingle() as unknown as Promise<{ data: StaffAssignment | null; error: unknown }>),
     ]);
 
     setRoles((rolesRes.data ?? []).map((r) => r.role));
     setProfile(profileRes.data ?? null);
     setUserBoutiqueId(staffRes.data?.boutique_id ?? null);
-    setUserCountryId(staffRes.data?.country_id ?? null);
+    setUserCountryId(staffRes.data?.country_id ?? staffRes.data?.boutiques?.country_id ?? null);
     setLoading(false);
   }
 
@@ -106,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from("profiles")
       .select("full_name, avatar_url, phone")
       .eq("user_id", user.id)
-      .single() as any as Promise<{ data: Profile | null; error: any }>);
+      .single() as unknown as Promise<{ data: Profile | null; error: unknown }>);
     if (data) setProfile(data);
   };
 

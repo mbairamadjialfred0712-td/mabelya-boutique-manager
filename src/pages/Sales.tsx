@@ -31,7 +31,7 @@ export default function Sales() {
   const [filterBoutique, setFilterBoutique] = useState<string>("all");
   const [showArchived, setShowArchived] = useState(false);
   const queryClient = useQueryClient();
-  const { user, hasRole, userBoutiqueId, userCountryId } = useAuth();
+  const { user, hasRole, userBoutiqueId, userCountryId, loading: authLoading } = useAuth();
 
   const isSuperAdmin = hasRole("super_admin");
   const isAdminBoutique = hasRole("admin_boutique");
@@ -96,6 +96,7 @@ export default function Sales() {
 
       return data ?? [];
     },
+    enabled: !authLoading && (isSuperAdmin || (isAdminBoutique && !!userCountryId) || !!userBoutiqueId),
   });
 
   const { data: boutiques } = useQuery({
@@ -121,9 +122,12 @@ export default function Sales() {
       for (const item of saleData.items) {
         const { data: product } = await supabase
           .from("products")
-          .select("stock_quantity, name")
+          .select("stock_quantity, name, is_archived, is_active, boutique_id")
           .eq("id", item.product_id)
           .single();
+        if (!product || product.is_archived || !product.is_active || product.boutique_id !== saleData.boutique_id) {
+          throw new Error(`"${product?.name ?? item.product_id}" n'est plus disponible pour cette boutique`);
+        }
         if (!product || product.stock_quantity < item.quantity) {
           throw new Error(`Stock insuffisant pour "${product?.name ?? item.product_id}" — seulement ${product?.stock_quantity ?? 0} disponible(s)`);
         }
@@ -440,6 +444,9 @@ function NewSaleForm({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
+  const productsForSelectedBoutique = boutiqueId
+    ? products.filter((product) => product.boutique_id === boutiqueId)
+    : [];
 
   // Auto-sélectionner la boutique si une seule disponible
   useEffect(() => {
@@ -453,8 +460,13 @@ function NewSaleForm({
     return isNaN(price) ? 0 : price;
   };
 
+  useEffect(() => {
+    setSelectedProduct("");
+    setCart([]);
+  }, [boutiqueId]);
+
   const addToCart = () => {
-    const product = products.find((p) => p.id === selectedProduct);
+    const product = productsForSelectedBoutique.find((p) => p.id === selectedProduct);
     if (!product) { toast.error("Veuillez sélectionner un produit"); return; }
     const qtyNum = Number(qty);
     if (!qtyNum || qtyNum <= 0) { toast.error("La quantité doit être supérieure à 0"); return; }
@@ -536,21 +548,23 @@ function NewSaleForm({
       <div className="border border-border rounded-lg p-3 space-y-3">
         <Label className="text-sm font-semibold">
           Ajouter des produits
-          {products.length > 0 && (
+          {boutiqueId && productsForSelectedBoutique.length > 0 && (
             <span className="text-xs font-normal text-muted-foreground ml-2">
-              ({products.length} en stock)
+              ({productsForSelectedBoutique.length} en stock)
             </span>
           )}
         </Label>
-        <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+        <Select value={selectedProduct} onValueChange={setSelectedProduct} disabled={!boutiqueId}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Choisir un produit" />
+            <SelectValue placeholder={boutiqueId ? "Choisir un produit" : "Choisir d'abord une boutique"} />
           </SelectTrigger>
           <SelectContent>
-            {products.length === 0 ? (
+            {!boutiqueId ? (
+              <SelectItem value="__no_boutique__" disabled>Choisir d'abord une boutique</SelectItem>
+            ) : productsForSelectedBoutique.length === 0 ? (
               <SelectItem value="__empty__" disabled>Aucun produit en stock</SelectItem>
             ) : (
-              products.map((p) => (
+              productsForSelectedBoutique.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name} — {formatCurrency(getPrice(p))} (stock: {p.stock_quantity})
                 </SelectItem>
