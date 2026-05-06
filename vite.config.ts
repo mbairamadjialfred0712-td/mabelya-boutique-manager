@@ -19,12 +19,12 @@ export default defineConfig(({ mode }) => ({
     // Dev tool Lovable
     mode === "development" && componentTagger(),
 
-    // ✅ PWA CONFIG
-    VitePWA({
+    // PWA désactivée en développement pour éviter que l'ancien formulaire reste en cache
+    mode === "production" && VitePWA({
       registerType: "autoUpdate",
 
       devOptions: {
-        enabled: true, // utile pour tester en local
+        enabled: false,
       },
 
       includeAssets: ["icon-192.png", "icon-512.png"],
