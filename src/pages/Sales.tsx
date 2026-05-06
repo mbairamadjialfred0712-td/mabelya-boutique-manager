@@ -444,9 +444,14 @@ function NewSaleForm({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [qty, setQty] = useState("1");
+  const availableProducts = products.filter((product) => (
+    product.is_archived === false &&
+    product.is_active === true &&
+    Number(product.stock_quantity) > 0
+  ));
   const productsForSelectedBoutique = boutiqueId
-    ? products.filter((product) => product.boutique_id === boutiqueId)
-    : [];
+    ? availableProducts.filter((product) => product.boutique_id === boutiqueId)
+    : availableProducts;
 
   // Auto-sélectionner la boutique si une seule disponible
   useEffect(() => {
@@ -548,11 +553,9 @@ function NewSaleForm({
       <div className="border border-border rounded-lg p-3 space-y-3">
         <Label className="text-sm font-semibold">
           Ajouter des produits
-          {boutiqueId && productsForSelectedBoutique.length > 0 && (
-            <span className="text-xs font-normal text-muted-foreground ml-2">
-              ({productsForSelectedBoutique.length} en stock)
-            </span>
-          )}
+          <span className="text-xs font-normal text-muted-foreground ml-2">
+            ({productsForSelectedBoutique.length} en stock)
+          </span>
         </Label>
         <Select value={selectedProduct} onValueChange={setSelectedProduct} disabled={!boutiqueId}>
           <SelectTrigger className="w-full">
