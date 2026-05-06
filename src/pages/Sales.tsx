@@ -70,7 +70,7 @@ export default function Sales() {
     queryFn: async () => {
       let query = supabase
         .from("products")
-        .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, boutiques(id, name, country_id)")
+        .select("id, name, selling_price, purchase_price, stock_quantity, boutique_id, is_active, is_archived, boutiques(id, name, country_id)")
         .eq("is_archived", false)
         .eq("is_active", true)
         .gt("stock_quantity", 0)
